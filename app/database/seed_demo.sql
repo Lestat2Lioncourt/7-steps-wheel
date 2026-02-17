@@ -181,3 +181,32 @@ INSERT INTO indicateur_etapes (indicateur_id, etape, statut_global_id, commentai
 (14, 5, NULL, NULL, NULL, NULL, 3, NULL),
 (14, 6, NULL, NULL, NULL, NULL, 3, 'Solution Excel en cours de deploiement'),
 (14, 7, NULL, NULL, NULL, NULL, 1, NULL);
+
+-- ============================================
+-- Utilisateurs demo
+-- ============================================
+INSERT INTO utilisateurs (login, nom, email, trigramme, role) VALUES
+('admin', 'Administrateur', NULL, 'ADM', 'admin'),
+('amin', 'KOUYATE, Amin', 'amin.kouyate@example.com', 'AKO', 'intervenant'),
+('pascal.g', 'GARNIER, Pascal', 'pascal.garnier@example.com', 'PGA', 'intervenant'),
+('gisele', 'MARTIN, Gisele', 'gisele.martin@example.com', 'GMA', 'intervenant'),
+('p.dupont', 'DUPONT, Pierre', 'p.dupont@example.com', 'PDU', 'intervenant');
+
+-- ============================================
+-- Actions demo (liees a ITR_QUAL_REF_TECH id=1, cat SLA Transverse id=1)
+-- ============================================
+INSERT INTO actions (titre, description, niveau, indicateur_id, categorie_id, etape, assignee_login, statut, commentaire, cree_par, date_creation) VALUES
+('Obtenir la liste exhaustive des referentiels', NULL, 'indicateur', 1, NULL, 3, 'amin', 'a_faire', NULL, 'admin', '2026-01-05'),
+('Definir le format de remontee', NULL, 'indicateur', 1, NULL, 4, 'pascal.g', 'a_faire', NULL, 'admin', '2026-01-05'),
+('Controle qualite des donnees', NULL, 'indicateur', 1, NULL, 5, 'amin', 'a_faire', NULL, 'admin', '2026-01-06'),
+('Obtenir les acces a la BDD supervision', NULL, 'categorie', NULL, 1, 2, 'p.dupont', 'a_faire', NULL, 'admin', '2026-01-05'),
+('Cadrage patrimoine documentaire', NULL, 'indicateur', 1, NULL, 2, 'gisele', 'en_cours', NULL, 'admin', '2026-01-03'),
+('Mise a jour referentiels contrat', NULL, 'categorie', NULL, 1, 1, 'pascal.g', 'en_cours', NULL, 'admin', '2026-01-02'),
+('Identifier les sources de donnees', NULL, 'indicateur', 1, NULL, 2, 'p.dupont', 'a_valider', NULL, 'admin', '2026-01-01'),
+('Definir criteres de conformite', NULL, 'indicateur', 1, NULL, 1, 'p.dupont', 'termine', NULL, 'admin', '2025-12-15'),
+('Export automatise SCCM', NULL, 'indicateur', 1, NULL, 3, 'amin', 'rejete', 'Hors perimetre actuel', 'admin', '2025-12-10');
+
+-- Actions globales (visibles depuis tous les indicateurs)
+INSERT INTO actions (titre, description, niveau, indicateur_id, categorie_id, etape, assignee_login, statut, commentaire, cree_par, date_creation) VALUES
+('Obtenir acces BDD central', 'Blocage acces base de donnees pour tous les indicateurs', 'global', NULL, NULL, 3, 'p.dupont', 'en_cours', NULL, 'admin', '2026-01-04'),
+('Valider la gouvernance des donnees', NULL, 'global', NULL, NULL, 1, 'gisele', 'a_faire', NULL, 'admin', '2026-01-07');

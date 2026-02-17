@@ -51,5 +51,8 @@ def open_browser():
 
 
 if __name__ == "__main__":
-    threading.Timer(1.0, open_browser).start()
+    # Ouvrir le navigateur seulement si lance directement (pas via start.py)
+    import os
+    if not os.environ.get("WERKZEUG_RUN_MAIN"):
+        threading.Timer(1.0, open_browser).start()
     app.run(host=HOST, port=PORT, debug=True)

@@ -10,17 +10,80 @@
 
 <div class="accueil-container">
     <h1 class="accueil-title">Suivi de mise en place des indicateurs des contrats</h1>
+    <p class="accueil-subtitle">Connecte : {{ user_nom }}
+        <a href="{{ url_for('main.logout') }}" style="color:#e94560;font-size:11px;margin-left:8px">changer</a>
+    </p>
+
+    {% if attach_error %}
+    <p style="color:#dc2626;font-size:13px">{{ attach_error }}</p>
+    {% endif %}
+
     <p class="accueil-subtitle">Selectionnez un projet</p>
     <div class="project-cards">
         {% for p in projects %}
         <a class="project-card" href="{{ url_for('main.select_project', project_id=p.id) }}">
             <div class="project-card-name">{{ p.name }}</div>
-            <div class="project-card-file">{{ p.db_file }}</div>
+            <div class="project-card-file">{{ p.db_path if p.db_path else p.db_file }}</div>
             <div class="project-card-btn">Ouvrir</div>
         </a>
         {% endfor %}
+
+        <!-- Carte creation -->
+        <div class="project-card new-project-card" onclick="showDialog('new-project-dialog')">
+            <div class="project-card-name" style="font-size:32px;color:#3a7bd5">+</div>
+            <div class="project-card-file">Nouveau projet</div>
+        </div>
+
+        <!-- Carte rattachement -->
+        <div class="project-card new-project-card" onclick="showDialog('attach-project-dialog')">
+            <div class="project-card-name" style="font-size:24px;color:#a78bfa">&#128279;</div>
+            <div class="project-card-file">Rattacher existant</div>
+        </div>
     </div>
 </div>
+
+<!-- Dialog creation projet -->
+<div class="new-project-overlay" id="new-project-dialog" onclick="if(event.target===this)this.style.display='none'">
+    <form class="login-form" method="POST" action="{{ url_for('main.create_project_route') }}">
+        <h3 style="color:#fff;margin-bottom:14px;font-size:16px">Nouveau projet</h3>
+        <div class="login-field">
+            <label for="project-name">Nom du projet</label>
+            <input type="text" id="project-name" name="name" placeholder="Ex: Contrat ACME 2026" required>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+            <button type="button" class="btn btn-secondary" onclick="this.closest('.new-project-overlay').style.display='none'">Annuler</button>
+            <button type="submit" class="btn btn-primary">Creer</button>
+        </div>
+    </form>
+</div>
+
+<!-- Dialog rattachement projet -->
+<div class="new-project-overlay" id="attach-project-dialog" onclick="if(event.target===this)this.style.display='none'">
+    <form class="login-form" method="POST" action="{{ url_for('main.attach_project_route') }}">
+        <h3 style="color:#fff;margin-bottom:14px;font-size:16px">Rattacher un projet existant</h3>
+        <div class="login-field">
+            <label for="attach-name">Nom du projet</label>
+            <input type="text" id="attach-name" name="name" placeholder="Ex: Contrat ACME 2026" required>
+        </div>
+        <div class="login-field">
+            <label for="attach-path">Chemin vers le fichier .db</label>
+            <input type="text" id="attach-path" name="path" placeholder="C:\Users\...\projet.db" required>
+        </div>
+        <p style="font-size:10px;color:#555;margin-bottom:8px">Le fichier sera reference directement (pas de copie). Tout le monde travaille sur la meme base.</p>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+            <button type="button" class="btn btn-secondary" onclick="this.closest('.new-project-overlay').style.display='none'">Annuler</button>
+            <button type="submit" class="btn btn-primary">Rattacher</button>
+        </div>
+    </form>
+</div>
+
+<script>
+function showDialog(id) {
+    document.getElementById(id).style.display = 'flex';
+    var input = document.querySelector('#' + id + ' input');
+    if (input) setTimeout(function() { input.focus(); }, 100);
+}
+</script>
 
 </body>
 </html>

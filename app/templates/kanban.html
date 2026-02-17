@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{# kanban_level = 'global' | 'categorie' | 'indicateur' #}
+
+{% block title %}Roue CSI - Actions
+{%- if kanban_level == 'indicateur' %} {{ data.indicateur.code }}
+{%- elif kanban_level == 'categorie' %} {{ data.categorie.nom }}
+{%- else %} Global{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+{% if kanban_level == 'global' %}
+<a href="{{ url_for('main.vue_globale') }}">Global</a>
+<span class="sep"> &rsaquo; </span>
+<span class="current">Actions</span>
+{% elif kanban_level == 'categorie' %}
+<a href="{{ url_for('main.vue_globale') }}">Global</a>
+<span class="sep"> &rsaquo; </span>
+<a href="{{ url_for('main.vue_categorie', id=data.categorie.id) }}">{{ data.categorie.nom }}</a>
+<span class="sep"> &rsaquo; </span>
+<span class="current">Actions</span>
+{% else %}
+<a href="{{ url_for('main.vue_globale') }}">Global</a>
+<span class="sep"> &rsaquo; </span>
+<a href="{{ url_for('main.vue_categorie', id=data.categorie.id) }}">{{ data.categorie.nom }}</a>
+<span class="sep"> &rsaquo; </span>
+<a href="{{ url_for('main.vue_indicateur', id=data.indicateur.id) }}">{{ data.indicateur.code }}</a>
+<span class="sep"> &rsaquo; </span>
+<span class="current">Actions</span>
+{% endif %}
+{% endblock %}
+
+{% block sidebar %}
+<div class="sidebar-section">
+    <h4>Categories</h4>
+    {% for cat in data.categories %}
+    <a class="sidebar-item{% if kanban_level == 'categorie' and cat.id == data.categorie.id %} active{% endif %}"
+       href="{{ url_for('main.vue_categorie', id=cat.id) }}">
+        <span class="sidebar-dot" style="background:{{ COL[cat.worst] }}"></span>
+        <span>{{ cat.nom }}</span>
+        {% if kanban_level == 'global' %}<span class="sidebar-count">{{ cat.count }}</span>{% endif %}
+    </a>
+    {% endfor %}
+</div>
+{% if kanban_level in ('categorie', 'indicateur') %}
+<div class="sidebar-divider"></div>
+<div class="sidebar-section">
+    <h4>Indicateurs</h4>
+    {% set ind_list = data.indicateurs if kanban_level == 'categorie' else data.siblings %}
+    {% for sib in ind_list %}
+    <a class="sidebar-item{% if kanban_level == 'indicateur' and sib.id == data.indicateur.id %} active{% endif %}"
+       href="{{ url_for('main.vue_indicateur', id=sib.id) }}"
+       title="{{ sib.code }}{% if sib.description %} : {{ sib.description }}{% endif %}">
+        <span class="sidebar-dot" style="background:{{ COL[sib.worst] }}"></span>
+        <span style="font-size:10px">{{ sib.code }}</span>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block fiche_panel %}
+{% if kanban_level == 'indicateur' %}
+{% set ind = data.indicateur %}
+{% set type_class = 'fb-sla' if ind.type == 'SLA' else ('fb-kpi' if ind.type == 'KPI' else 'fb-xla') %}
+<div class="fiche-panel">
+    <div class="fiche-inner">
+        <div class="fiche-title">{{ ind.code }}</div>
+        <div class="fiche-desc">{{ ind.description }}</div>
+        <div class="fiche-badges">
+            <span class="fiche-badge {{ type_class }}">{{ ind.type }}</span>
+            <span class="fiche-badge fb-etat">{{ ind.etat }}</span>
+        </div>
+        <div class="fiche-field">
+            <label>Chapitre</label>
+            <div class="val">{{ ind.chapitre }}</div>
+        </div>
+        <div class="fiche-field">
+            <label>Categorie</label>
+            <div class="val">{{ data.categorie.nom }}</div>
+        </div>
+        <a class="fiche-actions-link" href="{{ url_for('main.vue_indicateur', id=ind.id) }}">
+            &lsaquo; Retour a la roue
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="view-header">
+    <div>
+        {% if kanban_level == 'global' %}
+        <h2>Actions &mdash; Vue Globale</h2>
+        <div class="subtitle">Actions transverses a tous les indicateurs</div>
+        {% elif kanban_level == 'categorie' %}
+        <h2>Actions &mdash; {{ data.categorie.nom }}</h2>
+        <div class="subtitle">Actions de la categorie + heritees (global)</div>
+        {% else %}
+        <h2>Actions &mdash; {{ data.indicateur.code }}</h2>
+        <div class="subtitle">{{ data.indicateur.description }}</div>
+        {% endif %}
+    </div>
+    <button class="kanban-new-btn" onclick="openActionModal(null)">+ Nouvelle action</button>
+</div>
+<div class="kanban-area">
+    <div class="kanban-board">
+        {% for status in kanban_columns %}
+        {% set actions_list = actions.columns[status] %}
+        <div class="kanban-column" data-status="{{ status }}">
+            <h4>{{ kanban_labels[status] }} <span class="kcount">{{ actions_list|length }}</span></h4>
+            <div class="kanban-cards">
+                {% for a in actions_list %}
+                <div class="kanban-card{% if a.niveau == 'categorie' %} cat-card{% elif a.niveau == 'global' %} global-card{% endif %}"
+                     data-id="{{ a.id }}"
+                     data-titre="{{ a.titre }}"
+                     data-etape="{{ a.etape }}"
+                     data-assignee="{{ a.assignee_login }}"
+                     data-assignee-nom="{{ a.assignee_nom }}"
+                     data-assignee-tri="{{ a.assignee_trigramme or '' }}"
+                     data-commentaire="{{ a.commentaire or '' }}"
+                     data-description="{{ a.description or '' }}"
+                     data-niveau="{{ a.niveau }}">
+                    <div class="card-title">{{ a.titre }}</div>
+                    <div class="card-meta">
+                        {% if a.assignee_trigramme %}<span class="card-tri">{{ a.assignee_trigramme }}</span>{% endif %}
+                        {{ a.assignee_nom }}
+                    </div>
+                    <span class="card-step">{{ a.etape_nom }}</span>
+                    {% if a.niveau == 'categorie' and kanban_level != 'categorie' %}
+                    <span class="cat-badge">C {{ a.categorie_nom }}</span>
+                    {% endif %}
+                    {% if a.niveau == 'global' and kanban_level != 'global' %}
+                    <span class="global-badge">G Global</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                {% if not actions_list %}
+                <div class="kanban-empty">Aucune action</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Modale Kanban -->
+<div class="kanban-modal-overlay" id="kanban-modal-overlay" onclick="if(event.target===this)closeActionModal()">
+    <div class="kanban-modal">
+        <h3 id="km-title">Nouvelle action</h3>
+        <!-- Onglets niveau (creation) / info niveau (edition) -->
+        <div class="modal-tabs" id="km-niveau-tabs" style="display:none">
+            {% if kanban_level == 'indicateur' %}
+            <div class="modal-tab active" data-niveau="indicateur" onclick="selectNiveau(this)">
+                <span class="tab-badge" style="background:#3a7bd5">I</span> Indicateur
+            </div>
+            <div class="modal-tab" data-niveau="categorie" onclick="selectNiveau(this)">
+                <span class="tab-badge" style="background:#e94560">C</span> Categorie
+            </div>
+            <div class="modal-tab" data-niveau="global" onclick="selectNiveau(this)">
+                <span class="tab-badge" style="background:#a78bfa">G</span> Global
+            </div>
+            {% elif kanban_level == 'categorie' %}
+            <div class="modal-tab active" data-niveau="categorie" onclick="selectNiveau(this)">
+                <span class="tab-badge" style="background:#e94560">C</span> Categorie
+            </div>
+            <div class="modal-tab" data-niveau="global" onclick="selectNiveau(this)">
+                <span class="tab-badge" style="background:#a78bfa">G</span> Global
+            </div>
+            {% endif %}
+        </div>
+        <div class="cat-info" id="km-inherit-info" style="display:none"></div>
+        <form id="km-form" onsubmit="event.preventDefault();saveAction()">
+            <input type="hidden" id="km-action-id" value="">
+            <input type="hidden" id="km-niveau" value="{{ kanban_level }}">
+            <div class="form-group">
+                <label for="km-titre">Titre</label>
+                <input class="form-input" type="text" id="km-titre" required placeholder="Titre de l'action">
+            </div>
+            <div class="form-group">
+                <label for="km-description">Description</label>
+                <textarea class="form-input" id="km-description" placeholder="Description (optionnel)"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="km-etape">Etape</label>
+                <select class="form-input" id="km-etape">
+                    {% for e in etapes %}
+                    <option value="{{ e.numero }}">{{ e.numero }}. {{ e.nom }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group" style="position:relative">
+                <label for="km-assignee-input">Assignee</label>
+                <input class="form-input" type="text" id="km-assignee-input" autocomplete="off"
+                       placeholder="Nom, login ou email...">
+                <input type="hidden" id="km-assignee" value="">
+                <div class="assignee-dropdown" id="km-assignee-dropdown"></div>
+            </div>
+            <div class="form-group">
+                <label for="km-commentaire">Commentaire</label>
+                <textarea class="form-input" id="km-commentaire" placeholder="Commentaire (optionnel)"></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn-clear" id="km-delete" style="display:none" onclick="deleteAction()">Supprimer</button>
+                <button type="button" class="btn btn-secondary" onclick="closeActionModal()">Annuler</button>
+                <button type="submit" class="btn btn-primary" id="km-save">Enregistrer</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/sortable.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/kanban.js') }}"></script>
+<script>
+    window._kanbanLevel = '{{ kanban_level }}';
+    window._kanbanUserLogin = '{{ session.get("user_login", "admin") }}';
+    {% if kanban_level == 'indicateur' %}
+    window._kanbanIndicateurId = {{ data.indicateur.id }};
+    {% endif %}
+    {% if kanban_level in ('indicateur', 'categorie') %}
+    window._kanbanCategorieId = {{ data.categorie.id }};
+    {% endif %}
+    initKanban();
+</script>
+{% endblock %}

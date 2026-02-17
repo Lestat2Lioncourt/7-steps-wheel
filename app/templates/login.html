@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roue CSI - Identification</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="accueil-container">
+    <h1 class="accueil-title">Identification</h1>
+    {% if detected %}
+    <p class="accueil-subtitle">Identite detectee depuis votre session Windows</p>
+    {% else %}
+    <p class="accueil-subtitle">Saisissez vos informations pour continuer</p>
+    {% endif %}
+
+    {% if error %}
+    <p style="color:#dc2626;font-size:13px">{{ error }}</p>
+    {% endif %}
+
+    <form method="POST" class="login-form">
+        <div class="login-field">
+            <label for="email">Email O365</label>
+            <input type="email" id="email" name="email"
+                   value="{{ prefill.email or '' }}"
+                   placeholder="prenom.nom@entreprise.com" required>
+        </div>
+        <div class="login-field">
+            <label for="nom">Nom affiche</label>
+            <input type="text" id="nom" name="nom"
+                   value="{{ prefill.nom or '' }}"
+                   placeholder="NOM, Prenom" required>
+        </div>
+        <div class="login-field">
+            <label for="trigramme">Trigramme</label>
+            <input type="text" id="trigramme" name="trigramme"
+                   value="{{ prefill.trigramme or '' }}"
+                   placeholder="ABC" maxlength="4"
+                   style="text-transform:uppercase;width:80px;letter-spacing:2px;font-weight:700;text-align:center">
+            <span style="font-size:10px;color:#555;margin-left:6px">Auto-suggere depuis le nom</span>
+        </div>
+        <button type="submit" class="project-card-btn" style="margin-top:12px;padding:10px 32px;font-size:14px;border:none;border-radius:8px;cursor:pointer">
+            Confirmer
+        </button>
+    </form>
+
+    <script>
+    (function() {
+        var nomInput = document.getElementById('nom');
+        var triInput = document.getElementById('trigramme');
+        var userEdited = false;
+        triInput.addEventListener('input', function() { userEdited = true; });
+
+        nomInput.addEventListener('input', function() {
+            if (userEdited) return;
+            var nom = nomInput.value.trim();
+            if (!nom) { triInput.value = ''; return; }
+            fetch('/api/trigramme/suggest?nom=' + encodeURIComponent(nom))
+                .then(function(r) { return r.json(); })
+                .then(function(d) { if (!userEdited) triInput.value = d.trigramme; });
+        });
+
+        // Auto-suggest on load if nom is pre-filled
+        if (nomInput.value.trim() && !triInput.value) {
+            nomInput.dispatchEvent(new Event('input'));
+        }
+    })();
+    </script>
+</div>
+
+</body>
+</html>

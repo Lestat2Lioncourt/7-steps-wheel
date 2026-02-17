@@ -13,7 +13,7 @@
     <a href="{{ url_for('main.accueil') }}" style="text-decoration:none"><h1>{{ project_name }}</h1></a>
     <div class="main-tabs">
         <a class="main-tab{% if active_tab == 'roue' %} active{% endif %}" href="{{ url_for('main.vue_globale') }}">{{ project_name }}</a>
-        <span class="main-tab" style="cursor:default;opacity:.4" title="A venir">Referentiel</span>
+        <a class="main-tab{% if active_tab == 'referentiel' %} active{% endif %}" href="{{ url_for('main.vue_referentiel') }}">Referentiel</a>
     </div>
     <div class="topbar-right">
         <div class="inline-counters" id="counters"></div>
@@ -22,6 +22,10 @@
             <span class="current">Vue Globale</span>
             {% endblock %}
         </div>
+        <a class="user-badge" href="{{ url_for('main.logout') }}" title="Changer d'identite">
+            <span class="user-avatar">{{ session.get('user_trigramme', '') or session.get('user_nom', '?')[:1] }}</span>
+            <span>{{ session.get('user_nom', '') }}</span>
+        </a>
     </div>
 </div>
 
@@ -73,6 +77,8 @@
         <textarea class="modal-comment" id="modal-comment" placeholder="Commentaire..."></textarea>
         <div class="modal-actions">
             <button class="btn-clear" id="modal-clear" onclick="clearLayer()">Vider cette couche</button>
+            <a class="btn-action-link" id="modal-action-link" style="display:none" onclick="goToKanbanNew()">+ Action</a>
+            <span style="flex:1"></span>
             <button class="btn btn-secondary" onclick="closeModal()">Annuler</button>
             <button class="btn btn-primary" onclick="saveModal()">Enregistrer</button>
         </div>

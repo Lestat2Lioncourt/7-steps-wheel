@@ -39,6 +39,7 @@
         <h2>{{ data.categorie.nom }}</h2>
         <div class="subtitle">{{ data.total }} indicateurs</div>
     </div>
+    <a class="kanban-new-btn" href="{{ url_for('main.vue_kanban_categorie', id=data.categorie.id) }}" style="text-decoration:none">Actions (Kanban)</a>
 </div>
 <div class="wheel-area">
     <svg id="wh-cat" width="440" height="440" viewBox="0 0 440 440"></svg>

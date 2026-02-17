@@ -20,10 +20,13 @@ PROJECTS_PATH = DATA_DIR / "projects.json"
 _active_db_path = None
 
 
-def set_active_project(db_file: str) -> None:
-    """Definit le projet actif via le nom du fichier DB."""
+def set_active_project(db_file: str = None, db_path: str = None) -> None:
+    """Definit le projet actif. db_path (absolu) a priorite sur db_file (relatif a data/)."""
     global _active_db_path
-    _active_db_path = DATA_DIR / db_file
+    if db_path:
+        _active_db_path = Path(db_path)
+    else:
+        _active_db_path = DATA_DIR / db_file
 
 
 def get_active_db_path() -> Path | None:
@@ -87,9 +90,106 @@ def init_db(db_path: str | Path = DB_PATH, force: bool = False) -> None:
                 print(f"Donnees demo chargees")
             print(f"Base creee : {db_path}")
         else:
+            # Migration : ajouter les colonnes email/trigramme si absentes
+            cols = {row["name"] for row in conn.execute("PRAGMA table_info(utilisateurs)").fetchall()}
+            for col_name in ("email", "trigramme"):
+                if col_name not in cols:
+                    try:
+                        conn.execute(f"ALTER TABLE utilisateurs ADD COLUMN {col_name} TEXT")
+                        print(f"Migration : colonne '{col_name}' ajoutee a utilisateurs")
+                    except sqlite3.OperationalError:
+                        pass  # colonne deja ajoutee par un autre processus
+            conn.commit()
             print(f"Base existante : {db_path}")
     finally:
         conn.close()
+
+
+def create_project(name: str) -> dict:
+    """Cree un nouveau projet : DB vierge (schema + ref) + entree dans projects.json.
+    Retourne le dict {id, name, db_file}."""
+    import re
+    import unicodedata
+
+    # Generer un slug a partir du nom
+    slug = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", slug).strip("-").lower()
+    if not slug:
+        slug = "projet"
+
+    # S'assurer que l'id et le fichier sont uniques
+    existing = load_projects()
+    existing_ids = {p["id"] for p in existing}
+    existing_files = {p["db_file"] for p in existing}
+
+    base_slug = slug
+    counter = 1
+    while slug in existing_ids or f"{slug}.db" in existing_files:
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    db_file = f"{slug}.db"
+    db_path = DATA_DIR / db_file
+
+    # Creer la DB (schema + donnees de reference, sans demo)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = get_connection(db_path)
+    try:
+        with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+            conn.executescript(f.read())
+        with open(SEED_PATH, "r", encoding="utf-8") as f:
+            conn.executescript(f.read())
+    finally:
+        conn.close()
+
+    # Ajouter dans projects.json
+    project = {"id": slug, "name": name, "db_file": db_file}
+    existing.append(project)
+    PROJECTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(PROJECTS_PATH, "w", encoding="utf-8") as f:
+        json.dump({"projects": existing}, f, ensure_ascii=False, indent=2)
+
+    print(f"Projet cree : {name} ({db_file})")
+    return project
+
+
+def attach_project(name: str, source_path: str) -> dict:
+    """Rattache un projet existant par reference directe (sans copie).
+    Retourne le dict {id, name, db_path}."""
+    import re
+    import unicodedata
+
+    source = Path(source_path).resolve()
+    if not source.exists():
+        raise FileNotFoundError(f"Fichier introuvable : {source_path}")
+
+    # Generer un slug pour l'id
+    slug = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", slug).strip("-").lower()
+    if not slug:
+        slug = "projet"
+
+    existing = load_projects()
+    existing_ids = {p["id"] for p in existing}
+
+    base_slug = slug
+    counter = 1
+    while slug in existing_ids:
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    # Appliquer les migrations sur la DB distante
+    init_db(source)
+
+    # Ajouter dans projects.json avec db_path (chemin absolu)
+    project = {"id": slug, "name": name, "db_path": str(source)}
+    existing.append(project)
+    PROJECTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(PROJECTS_PATH, "w", encoding="utf-8") as f:
+        json.dump({"projects": existing}, f, ensure_ascii=False, indent=2)
+
+    print(f"Projet rattache : {name} -> {source}")
+    return project
 
 
 if __name__ == "__main__":

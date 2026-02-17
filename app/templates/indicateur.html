@@ -63,6 +63,9 @@
             <label>Condition de conformite</label>
             <div class="val-box">{{ ind.conformite }}</div>
         </div>
+        <a class="fiche-actions-link" href="{{ url_for('main.vue_kanban', id=ind.id) }}">
+            Actions (Kanban) &rsaquo;
+        </a>
     </div>
 </div>
 {% endblock %}

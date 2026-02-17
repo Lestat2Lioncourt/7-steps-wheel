@@ -692,6 +692,13 @@ def save_step(context, etape, layer, color_name, commentaire,
             """, (statut_id, commentaire or None, etape))
 
         elif context == 'categorie':
+            # Deriver categorie_id depuis indicateur_id si manquant
+            if not categorie_id and indicateur_id:
+                row = conn.execute(
+                    "SELECT categorie_id FROM indicateurs WHERE id = ?", (indicateur_id,)
+                ).fetchone()
+                if row:
+                    categorie_id = row['categorie_id']
             # Propage aux indicateurs de la categorie
             conn.execute(f"""
                 UPDATE indicateur_etapes
@@ -710,6 +717,134 @@ def save_step(context, etape, layer, color_name, commentaire,
             """, (statut_id, commentaire or None, etape, indicateur_id))
 
         conn.commit()
+    finally:
+        conn.close()
+
+
+# -------------------------------------------------------------------
+# Vue Referentiel
+# -------------------------------------------------------------------
+
+# Mappings pour les classes CSS des types et etats
+_TYPE_CLASS = {'SLA': 'type-sla', 'KPI': 'type-kpi', 'XLA': 'type-xla'}
+_ETAT_CLASS = {
+    'Réalisé': 'etat-realise', 'En cours': 'etat-encours',
+    'À cadrer': 'etat-acadrer', 'Cadré': 'etat-cadre',
+    'En attente': 'etat-enattente', 'Annulé': 'etat-annule',
+}
+
+
+def get_referentiel_data():
+    """
+    Retourne les donnees pour la vue referentiel :
+    - categories : [{id, nom, count, worst}]
+    - indicateurs : [{id, code, description, chapitre, categorie_nom, type, etat,
+                      etat_class, type_class, ciblage, conformite, worst}]
+    - etats : [{intitule}]
+    - types : [{intitule}]
+    - status_counts : {green: N, ...}
+    - total : nombre total d'indicateurs
+    """
+    conn = get_connection()
+    try:
+        # Indicateurs joints avec categories, types, etats
+        inds = conn.execute("""
+            SELECT i.id, i.code, i.description, i.chapitre, i.ciblage, i.conformite,
+                   i.categorie_id, c.nom as categorie_nom,
+                   t.intitule as type, e.intitule as etat
+            FROM indicateurs i
+            JOIN categories c ON i.categorie_id = c.id
+            JOIN types_indicateur t ON i.type_id = t.id
+            JOIN etats_indicateur e ON i.etat_id = e.id
+            ORDER BY i.code
+        """).fetchall()
+
+        # indicateur_etapes pour calculer worst color par indicateur
+        ie_rows = conn.execute("""
+            SELECT ie.indicateur_id,
+                   sg.severite as sev_global,
+                   sc.severite as sev_categorie,
+                   si.severite as sev_indicateur
+            FROM indicateur_etapes ie
+            LEFT JOIN statuts_etape sg ON ie.statut_global_id = sg.id
+            LEFT JOIN statuts_etape sc ON ie.statut_categorie_id = sc.id
+            LEFT JOIN statuts_etape si ON ie.statut_indicateur_id = si.id
+        """).fetchall()
+
+        ind_worst = {}  # indicateur_id -> max severite
+        for row in ie_rows:
+            sev = _step_worst_color_sev(row)
+            iid = row['indicateur_id']
+            if iid not in ind_worst or sev > ind_worst[iid]:
+                ind_worst[iid] = sev
+
+        # Construire la liste d'indicateurs
+        indicateurs = []
+        for ind in inds:
+            worst_sev = ind_worst.get(ind['id'], 0)
+            indicateurs.append({
+                'id': ind['id'],
+                'code': ind['code'],
+                'description': ind['description'],
+                'chapitre': ind['chapitre'] or '',
+                'categorie_nom': ind['categorie_nom'],
+                'type': ind['type'],
+                'etat': ind['etat'],
+                'type_class': _TYPE_CLASS.get(ind['type'], ''),
+                'etat_class': _ETAT_CLASS.get(ind['etat'], ''),
+                'ciblage': ind['ciblage'] or '',
+                'conformite': ind['conformite'] or '',
+                'worst': _SEVERITE_TO_COLOR.get(worst_sev, 'grey'),
+            })
+
+        # Categories avec count et worst
+        cats_rows = conn.execute("""
+            SELECT c.id, c.nom, c.ordre, COUNT(i.id) as count
+            FROM categories c
+            LEFT JOIN indicateurs i ON i.categorie_id = c.id
+            GROUP BY c.id
+            ORDER BY c.ordre
+        """).fetchall()
+
+        # Worst par categorie = max severite de ses indicateurs
+        cat_inds = {}
+        for ind in inds:
+            cat_inds.setdefault(ind['categorie_id'], []).append(ind['id'])
+
+        categories = []
+        for cat in cats_rows:
+            cat_ind_ids = cat_inds.get(cat['id'], [])
+            if cat_ind_ids:
+                worst_sev = max(ind_worst.get(iid, 0) for iid in cat_ind_ids)
+            else:
+                worst_sev = 0
+            categories.append({
+                'id': cat['id'],
+                'nom': cat['nom'],
+                'count': cat['count'],
+                'worst': _SEVERITE_TO_COLOR.get(worst_sev, 'grey'),
+            })
+
+        # Listes pour les selects de filtre
+        etats = [{'intitule': r['intitule']} for r in
+                 conn.execute("SELECT intitule FROM etats_indicateur ORDER BY ordre").fetchall()]
+        types = [{'intitule': r['intitule']} for r in
+                 conn.execute("SELECT intitule FROM types_indicateur ORDER BY ordre").fetchall()]
+
+        # Compteurs globaux
+        status_counts = {'green': 0, 'yellow': 0, 'orange': 0, 'red': 0, 'grey': 0}
+        for iid, sev in ind_worst.items():
+            c = _SEVERITE_TO_COLOR.get(sev, 'grey')
+            status_counts[c] = status_counts.get(c, 0) + 1
+
+        return {
+            'categories': categories,
+            'indicateurs': indicateurs,
+            'etats': etats,
+            'types': types,
+            'status_counts': status_counts,
+            'total': len(indicateurs),
+        }
     finally:
         conn.close()
 

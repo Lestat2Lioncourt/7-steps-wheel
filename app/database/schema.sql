@@ -49,6 +49,8 @@ CREATE TABLE utilisateurs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     login       TEXT UNIQUE NOT NULL,
     nom         TEXT NOT NULL,
+    email       TEXT,
+    trigramme   TEXT,
     role        TEXT NOT NULL CHECK (role IN ('admin', 'intervenant'))
 );
 
@@ -84,12 +86,12 @@ CREATE TABLE indicateur_etapes (
     UNIQUE(indicateur_id, etape)
 );
 
--- Actions Kanban (rattachement a 2 niveaux)
+-- Actions Kanban (rattachement a 3 niveaux : global, categorie, indicateur)
 CREATE TABLE actions (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     titre               TEXT NOT NULL,
     description         TEXT,
-    niveau              TEXT NOT NULL CHECK (niveau IN ('indicateur', 'categorie')),
+    niveau              TEXT NOT NULL CHECK (niveau IN ('global', 'indicateur', 'categorie')),
     indicateur_id       INTEGER REFERENCES indicateurs(id),
     categorie_id        INTEGER REFERENCES categories(id),
     etape               INTEGER NOT NULL REFERENCES etapes(numero),
@@ -101,6 +103,7 @@ CREATE TABLE actions (
     date_creation       TEXT NOT NULL,
     date_modification   TEXT,
     CHECK (
+        (niveau = 'global') OR
         (niveau = 'indicateur' AND indicateur_id IS NOT NULL) OR
         (niveau = 'categorie' AND categorie_id IS NOT NULL)
     )

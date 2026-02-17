@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Roue CSI - Referentiel{% endblock %}
+
+{% block breadcrumb %}
+<span class="current">Referentiel</span>
+{% endblock %}
+
+{% block sidebar %}
+<div class="sidebar-section">
+    <h4>Filtres rapides</h4>
+    <div class="sidebar-item active" onclick="qfCat(this, 'all')">
+        <span style="color:#888">Tous</span>
+        <span class="sidebar-count">{{ data.total }}</span>
+    </div>
+    {% for cat in data.categories %}
+    <div class="sidebar-item" onclick="qfCat(this, '{{ cat.nom }}')">
+        <span class="sidebar-dot" style="background:{{ COL[cat.worst] }}"></span>
+        <span>{{ cat.nom }}</span>
+        <span class="sidebar-count">{{ cat.count }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="ref-header">
+    <h2>Referentiel des indicateurs</h2>
+    <div class="subtitle">Design et parametrage des indicateurs</div>
+</div>
+
+<div class="ref-toolbar">
+    <input type="text" class="search-input" placeholder="Rechercher par code, description..." id="ref-search">
+    <select class="filter-select" id="ref-cat-filter">
+        <option value="all">Toutes categories</option>
+        {% for cat in data.categories %}
+        <option value="{{ cat.nom }}">{{ cat.nom }}</option>
+        {% endfor %}
+    </select>
+    <select class="filter-select" id="ref-type-filter">
+        <option value="all">Tous types</option>
+        {% for t in data.types %}
+        <option value="{{ t.intitule }}">{{ t.intitule }}</option>
+        {% endfor %}
+    </select>
+    <select class="filter-select" id="ref-etat-filter">
+        <option value="all">Tous etats</option>
+        {% for e in data.etats %}
+        <option value="{{ e.intitule }}">{{ e.intitule }}</option>
+        {% endfor %}
+    </select>
+</div>
+
+<div class="ref-stats" id="ref-stats"></div>
+
+<div class="table-area">
+    <table class="ref-table">
+        <thead>
+            <tr>
+                <th>CSI</th>
+                <th>Chap.</th>
+                <th>Code</th>
+                <th>Description</th>
+                <th>Categorie</th>
+                <th>Type</th>
+                <th>Etat</th>
+                <th>Ciblage</th>
+                <th>Conformite</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody id="ref-body">
+            {% for ind in data.indicateurs %}
+            <tr class="ref-row"
+                data-code="{{ ind.code }}"
+                data-desc="{{ ind.description }}"
+                data-cat="{{ ind.categorie_nom }}"
+                data-type="{{ ind.type }}"
+                data-etat="{{ ind.etat }}"
+                data-worst="{{ ind.worst }}"
+                onclick="location.href='{{ url_for('main.vue_indicateur', id=ind.id) }}'">
+                <td><span class="status-dot c-{{ ind.worst }}"></span></td>
+                <td style="color:#888;font-size:11px">{{ ind.chapitre }}</td>
+                <td style="font-weight:600;white-space:nowrap">{{ ind.code }}</td>
+                <td>{{ ind.description }}</td>
+                <td style="color:#777;font-size:11px">{{ ind.categorie_nom }}</td>
+                <td><span class="type-badge {{ ind.type_class }}">{{ ind.type }}</span></td>
+                <td><span class="etat-badge {{ ind.etat_class }}">{{ ind.etat }}</span></td>
+                <td style="font-size:11px;color:#999;max-width:140px" title="{{ ind.ciblage }}">{{ ind.ciblage[:23] ~ '...' if ind.ciblage|length > 25 else ind.ciblage }}</td>
+                <td style="font-size:11px;color:#999;max-width:140px" title="{{ ind.conformite }}">{{ ind.conformite[:23] ~ '...' if ind.conformite|length > 25 else ind.conformite }}</td>
+                <td><a class="roue-link" href="{{ url_for('main.vue_indicateur', id=ind.id) }}" onclick="event.stopPropagation()">Roue</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/referentiel.js') }}"></script>
+<script>initReferentiel();</script>
+{% endblock %}

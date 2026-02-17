@@ -194,37 +194,101 @@ function drawIndicatorWheel(svgId, indData, opts) {
     }
 
     // Comment slots layout
+    var BOX_W = 195;
+    var TEXT_PAD = 34;          // left offset for text (badge + margin)
+    var CHAR_W = 5.5;           // approx char width at font-size 10
+    var MAX_CHARS = Math.floor((BOX_W - TEXT_PAD) / CHAR_W);
+
     var slotDefs = {
-        6: { x: 4, w: 165, s: 'left' },
-        5: { x: 4, w: 165, s: 'left' },
-        0: { x: 4, w: 165, s: 'left' },
-        1: { x: 590, w: 165, s: 'right' },
-        2: { x: 590, w: 165, s: 'right' },
-        3: { x: 590, w: 165, s: 'right' }
+        6: { x: 4, w: BOX_W, s: 'left' },
+        5: { x: 4, w: BOX_W, s: 'left' },
+        0: { x: 4, w: BOX_W, s: 'left' },
+        1: { x: 800 - BOX_W - 5, w: BOX_W, s: 'right' },
+        2: { x: 800 - BOX_W - 5, w: BOX_W, s: 'right' },
+        3: { x: 800 - BOX_W - 5, w: BOX_W, s: 'right' }
     };
+
+    // Wrap a line into at most 2 lines, breaking at word boundary
+    function wrapLine(line, maxL) {
+        if (line.length <= maxL) return [line];
+        var brk = line.lastIndexOf(' ', maxL);
+        if (brk < maxL * 0.4) brk = maxL;
+        var l1 = line.substring(0, brk);
+        var l2 = line.substring(brk).trim();
+        if (l2.length > maxL) l2 = l2.substring(0, maxL - 2) + '..';
+        return l2 ? [l1, l2] : [l1];
+    }
+
+    // Count total rendered lines for a layer (after wrapping)
+    function countWrapped(lines) {
+        var n = 0;
+        lines.forEach(function(line) { n += wrapLine(line, MAX_CHARS).length; });
+        return n;
+    }
 
     function calcH(si) {
         var ls = layerComments(indData[si]);
         if (!ls.length) return 0;
         var h = 16;
         ls.forEach(function(l, i) {
-            h += 14;
-            h += (l.lines.length - 1) * 12;
+            var rendered = countWrapped(l.lines);
+            h += 14;                          // badge row (first rendered line)
+            h += (rendered - 1) * 12;         // additional rendered lines
             if (i < ls.length - 1) h += 3;
         });
         return h + 6;
     }
 
     function posSlots(list) {
-        var y = 8, r = [];
+        // Gather steps that have comments
+        var items = [];
         list.forEach(function(si) {
             var h = calcH(si);
-            if (h > 0) { r.push({ si: si, y: y, h: h }); y += h + 8; }
+            if (h > 0) {
+                items.push({ si: si, h: h, ey: pos[si].y });
+            }
+        });
+        if (!items.length) return [];
+        // Sort by ellipse Y
+        items.sort(function(a, b) { return a.ey - b.ey; });
+
+        var MIN_Y = 8, MAX_Y = 480, GAP = 8;
+
+        if (items.length === 1) {
+            var y0 = Math.max(Math.min(items[0].ey - items[0].h / 2, MAX_Y - items[0].h), MIN_Y);
+            return [{ si: items[0].si, y: y0, h: items[0].h }];
+        }
+
+        // Map ellipse Y range → full available height, using box centers
+        var eyMin = items[0].ey, eyMax = items[items.length - 1].ey;
+        var centerMin = MIN_Y + items[0].h / 2;
+        var centerMax = MAX_Y - items[items.length - 1].h / 2;
+        var eyRange = eyMax - eyMin;
+
+        var r = [];
+        items.forEach(function(item) {
+            var t = eyRange > 0 ? (item.ey - eyMin) / eyRange : 0.5;
+            var center = centerMin + t * (centerMax - centerMin);
+            var y = center - item.h / 2;
+            r.push({ si: item.si, y: y, h: item.h });
+        });
+
+        // Resolve any remaining overlaps
+        for (var i = 1; i < r.length; i++) {
+            var prevBottom = r[i - 1].y + r[i - 1].h + GAP;
+            if (r[i].y < prevBottom) r[i].y = prevBottom;
+        }
+        // Clamp to SVG bounds
+        r.forEach(function(item) {
+            item.y = Math.max(item.y, MIN_Y);
+            item.y = Math.min(item.y, MAX_Y - item.h);
         });
         return r;
     }
 
-    var allSlots = posSlots([6, 5, 0]).concat(posSlots([1, 2, 3]));
+    var leftSteps = [6, 5, 0];
+    var rightSteps = [1, 2, 3];
+    var allSlots = posSlots(leftSteps).concat(posSlots(rightSteps));
 
     // Draw comment boxes
     allSlots.forEach(function(slot) {
@@ -248,6 +312,9 @@ function drawIndicatorWheel(svgId, indData, opts) {
         // Group
         var grp = mk('g');
         grp.style.cursor = 'pointer';
+        if (opts.onClick) {
+            (function(idx) { grp.onclick = function() { opts.onClick(idx); }; })(si);
+        }
 
         var gt = mk('title');
         var tps = [];
@@ -286,7 +353,6 @@ function drawIndicatorWheel(svgId, indData, opts) {
 
         // Layer comments
         var cy2 = by + 24;
-        var maxL = Math.floor((bw - 34) / 5.5);
         ls.forEach(function(layer) {
             var br2 = mk('rect');
             br2.setAttribute('x', bx + 8);
@@ -305,13 +371,16 @@ function drawIndicatorWheel(svgId, indData, opts) {
             grp.appendChild(bt);
 
             layer.lines.forEach(function(line) {
-                var tx = mk('text');
-                tx.setAttribute('class', 'comment-text');
-                tx.setAttribute('x', bx + 27);
-                tx.setAttribute('y', cy2);
-                tx.textContent = line.length > maxL ? line.substring(0, maxL - 2) + '..' : line;
-                grp.appendChild(tx);
-                cy2 += 12;
+                var wrapped = wrapLine(line, MAX_CHARS);
+                wrapped.forEach(function(wl) {
+                    var tx = mk('text');
+                    tx.setAttribute('class', 'comment-text');
+                    tx.setAttribute('x', bx + 27);
+                    tx.setAttribute('y', cy2);
+                    tx.textContent = wl;
+                    grp.appendChild(tx);
+                    cy2 += 12;
+                });
             });
             cy2 += 3;
         });
@@ -402,6 +471,7 @@ var _modal = {
     context: null,       // 'global' | 'categorie' | 'indicateur'
     activeTab: null,     // 'global' | 'categorie' | 'indicateur'
     selectedColor: null, // 'green', 'red', ... or null
+    userChangedColor: false, // true si l'utilisateur a clique un bouton couleur
     opts: null,          // {stepData, categorie_id, indicateur_id, layerValues}
     tabs: []             // available tabs for this context
 };
@@ -441,6 +511,12 @@ function openModal(stepIdx, context, opts) {
     var clearBtn = document.getElementById('modal-clear');
     clearBtn.style.display = (context === 'indicateur') ? '' : 'none';
 
+    // Show/hide "+ Action" link (indicateur context only)
+    var actionLink = document.getElementById('modal-action-link');
+    if (actionLink) {
+        actionLink.style.display = (context === 'indicateur' && opts && opts.indicateur_id) ? '' : 'none';
+    }
+
     // Set note text
     var noteEl = document.getElementById('modal-note');
     if (context === 'indicateur' && _modal.tabs.length > 1) {
@@ -452,6 +528,9 @@ function openModal(stepIdx, context, opts) {
     } else {
         noteEl.textContent = '';
     }
+
+    // Reset user color flag
+    _modal.userChangedColor = false;
 
     // Default tab: 'indicateur' when editing from indicator view, first tab otherwise
     switchTab(context === 'indicateur' ? 'indicateur' : _modal.tabs[0]);
@@ -489,21 +568,24 @@ function switchTab(layer) {
 
 function loadTabData() {
     var layer = _modal.activeTab;
-    var color = null;
+    var storedColor = null;
     var comment = '';
 
     // Try to load from layerValues passed via opts
     if (_modal.opts.layerValues && _modal.opts.layerValues[layer]) {
         var lv = _modal.opts.layerValues[layer];
-        color = lv.color || null;
+        storedColor = lv.color || null;
         comment = lv.comment || '';
     }
     // For indicateur context, stepData has the 3 layers
     else if (_modal.opts.stepData && _modal.opts.stepData[layer]) {
         var sd = _modal.opts.stepData[layer];
-        color = sd.color || null;
+        storedColor = sd.color || null;
         comment = sd.comment || '';
     }
+
+    // Si l'utilisateur a deja choisi une couleur, la garder au switch d'onglet
+    var color = _modal.userChangedColor ? _modal.selectedColor : storedColor;
 
     // Set color picker
     _modal.selectedColor = color;
@@ -512,12 +594,13 @@ function loadTabData() {
         b.classList.toggle('selected', b.getAttribute('data-color') === color);
     });
 
-    // Set comment
+    // Le commentaire est toujours celui de la couche cible
     document.getElementById('modal-comment').value = comment;
 }
 
 function selColor(btn) {
     _modal.selectedColor = btn.getAttribute('data-color');
+    _modal.userChangedColor = true;
     var btns = document.querySelectorAll('#modal-colors .color-btn');
     btns.forEach(function(b) { b.classList.remove('selected'); });
     btn.classList.add('selected');
@@ -574,6 +657,12 @@ function saveModal() {
     .then(function(d) {
         if (d.ok) location.reload();
     });
+}
+
+function goToKanbanNew() {
+    if (!_modal.opts || !_modal.opts.indicateur_id) return;
+    var etape = _modal.stepIdx + 1;
+    location.href = '/indicateur/' + _modal.opts.indicateur_id + '/kanban?new=1&etape=' + etape;
 }
 
 // ===================================================================
