@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Roue CSI{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+    <a href="{{ url_for('main.accueil') }}" style="text-decoration:none"><h1>{{ project_name }}</h1></a>
+    <div class="main-tabs">
+        <a class="main-tab{% if active_tab == 'roue' %} active{% endif %}" href="{{ url_for('main.vue_globale') }}">{{ project_name }}</a>
+        <span class="main-tab" style="cursor:default;opacity:.4" title="A venir">Referentiel</span>
+    </div>
+    <div class="topbar-right">
+        <div class="inline-counters" id="counters"></div>
+        <div class="breadcrumb">
+            {% block breadcrumb %}
+            <span class="current">Vue Globale</span>
+            {% endblock %}
+        </div>
+    </div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="main-layout">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        {% block sidebar %}{% endblock %}
+    </div>
+
+    <!-- FICHE PANEL (indicateur only) -->
+    {% block fiche_panel %}{% endblock %}
+
+    <!-- CONTENT -->
+    <div class="content">
+        {% block content %}{% endblock %}
+    </div>
+</div>
+
+<!-- MODAL OVERLAY -->
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+        <h3 id="modal-title">Etape</h3>
+        <div class="modal-tabs" id="modal-tabs"></div>
+        <div class="modal-note" id="modal-note"></div>
+        <div class="color-picker" id="modal-colors">
+            <div>
+                <div class="color-btn" style="background:#6b7280" data-color="grey" onclick="selColor(this)"></div>
+                <span class="color-btn-label">Aucun</span>
+            </div>
+            <div>
+                <div class="color-btn" style="background:#22c55e" data-color="green" onclick="selColor(this)"></div>
+                <span class="color-btn-label">Validé</span>
+            </div>
+            <div>
+                <div class="color-btn" style="background:#eab308" data-color="yellow" onclick="selColor(this)"></div>
+                <span class="color-btn-label">En cours</span>
+            </div>
+            <div>
+                <div class="color-btn" style="background:#f97316" data-color="orange" onclick="selColor(this)"></div>
+                <span class="color-btn-label">Warning</span>
+            </div>
+            <div>
+                <div class="color-btn" style="background:#dc2626" data-color="red" onclick="selColor(this)"></div>
+                <span class="color-btn-label">Blocage</span>
+            </div>
+        </div>
+        <div class="modal-comment-label">Commentaire</div>
+        <textarea class="modal-comment" id="modal-comment" placeholder="Commentaire..."></textarea>
+        <div class="modal-actions">
+            <button class="btn-clear" id="modal-clear" onclick="clearLayer()">Vider cette couche</button>
+            <button class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+            <button class="btn btn-primary" onclick="saveModal()">Enregistrer</button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/wheel.js') }}"></script>
+<script>
+    // Compteurs topbar
+    buildInlineCounters('counters', {{ global_counts|tojson }});
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

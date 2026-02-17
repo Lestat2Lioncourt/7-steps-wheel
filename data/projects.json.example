@@ -1,0 +1,5 @@
+{
+  "projects": [
+    {"id": "mon-contrat", "name": "Mon contrat", "db_file": "mon_contrat.db"}
+  ]
+}

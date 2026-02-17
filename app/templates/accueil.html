@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roue CSI - Accueil</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="accueil-container">
+    <h1 class="accueil-title">Suivi de mise en place des indicateurs des contrats</h1>
+    <p class="accueil-subtitle">Selectionnez un projet</p>
+    <div class="project-cards">
+        {% for p in projects %}
+        <a class="project-card" href="{{ url_for('main.select_project', project_id=p.id) }}">
+            <div class="project-card-name">{{ p.name }}</div>
+            <div class="project-card-file">{{ p.db_file }}</div>
+            <div class="project-card-btn">Ouvrir</div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+</body>
+</html>

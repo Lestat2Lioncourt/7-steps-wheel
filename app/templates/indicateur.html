@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Roue CSI - {{ data.indicateur.code }}{% endblock %}
+
+{% block breadcrumb %}
+<a href="{{ url_for('main.vue_globale') }}">Global</a>
+<span class="sep"> &rsaquo; </span>
+<a href="{{ url_for('main.vue_categorie', id=data.categorie.id) }}">{{ data.categorie.nom }}</a>
+<span class="sep"> &rsaquo; </span>
+<span class="current">{{ data.indicateur.code }}</span>
+{% endblock %}
+
+{% block sidebar %}
+<div class="sidebar-section">
+    <h4>Categories</h4>
+    {% for cat in data.categories %}
+    <a class="sidebar-item" href="{{ url_for('main.vue_categorie', id=cat.id) }}">
+        <span class="sidebar-dot" style="background:{{ COL[cat.worst] }}"></span>
+        <span>{{ cat.nom }}</span>
+    </a>
+    {% endfor %}
+</div>
+<div class="sidebar-divider"></div>
+<div class="sidebar-section">
+    <h4>Indicateurs</h4>
+    {% for sib in data.siblings %}
+    <a class="sidebar-item{% if sib.id == data.indicateur.id %} active{% endif %}"
+       href="{{ url_for('main.vue_indicateur', id=sib.id) }}"
+       title="{{ sib.code }} : {{ sib.description }}">
+        <span class="sidebar-dot" style="background:{{ COL[sib.worst] }}"></span>
+        <span style="font-size:10px">{{ sib.code }}</span>
+    </a>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% set ind = data.indicateur %}
+{% set type_class = 'fb-sla' if ind.type == 'SLA' else ('fb-kpi' if ind.type == 'KPI' else 'fb-xla') %}
+
+{% block fiche_panel %}
+<div class="fiche-panel">
+    <div class="fiche-inner">
+        <div class="fiche-title">{{ ind.code }}</div>
+        <div class="fiche-desc">{{ ind.description }}</div>
+        <div class="fiche-badges">
+            <span class="fiche-badge {{ type_class }}">{{ ind.type }}</span>
+            <span class="fiche-badge fb-etat">{{ ind.etat }}</span>
+            <span class="fiche-badge" style="background:{{ COL[ind.worst] }}20;color:{{ COL[ind.worst] }};border:1px solid {{ COL[ind.worst] }}40">{{ COL_LABEL[ind.worst] }}</span>
+        </div>
+        <div class="fiche-field">
+            <label>Chapitre</label>
+            <div class="val">{{ ind.chapitre }}</div>
+        </div>
+        <div class="fiche-field">
+            <label>Categorie</label>
+            <div class="val">{{ data.categorie.nom }}</div>
+        </div>
+        <div class="fiche-field">
+            <label>Condition de ciblage</label>
+            <div class="val-box">{{ ind.ciblage }}</div>
+        </div>
+        <div class="fiche-field">
+            <label>Condition de conformite</label>
+            <div class="val-box">{{ ind.conformite }}</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="view-header">
+    <div>
+        <h2>{{ ind.code }}</h2>
+        <div class="subtitle">{{ ind.description }}</div>
+    </div>
+</div>
+<div class="wheel-area">
+    <svg id="wh-ind" width="800" height="490" viewBox="0 0 800 490"></svg>
+    <div class="right-panels">
+        <div id="sp-ind"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var stepData = {{ data.step_data|tojson }};
+    var statusCounts = {{ data.status_counts|tojson }};
+    var indicateurId = {{ data.indicateur.id }};
+    var categorieId = {{ data.categorie.id }};
+
+    drawIndicatorWheel('wh-ind', stepData, {
+        centerCode: '{{ ind.code }}',
+        centerDate: '{{ today }}',
+        onClick: function(idx) {
+            openModal(idx, 'indicateur', {
+                stepData: stepData[idx],
+                indicateur_id: indicateurId,
+                categorie_id: categorieId,
+                layerValues: stepData[idx]
+            });
+        }
+    });
+
+    buildStatusPanel('sp-ind', statusCounts);
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roue CSI - Prototype v3</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: #1a1a2e; color: #e0e0e0;
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+        }
+        /* ---- TOP BAR ---- */
+        .topbar {
+            background: #16213e; padding: 10px 24px;
+            display: flex; align-items: center; gap: 20px;
+            border-bottom: 2px solid #0f3460; box-shadow: 0 2px 10px rgba(0,0,0,0.3); flex-shrink: 0;
+        }
+        .topbar h1 { font-size: 18px; color: #e94560; margin-right: 20px; white-space: nowrap; }
+        .breadcrumb { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+        .breadcrumb a { color: #a0c4ff; text-decoration: none; cursor: pointer; }
+        .breadcrumb a:hover { text-decoration: underline; }
+        .breadcrumb .sep { color: #555; }
+        .breadcrumb .current { color: #fff; font-weight: 600; }
+
+        /* ---- MAIN LAYOUT ---- */
+        .main-layout { display: flex; flex: 1; overflow: hidden; }
+
+        /* ---- LEFT SIDEBAR ---- */
+        .sidebar {
+            width: 250px; min-width: 250px; background: #16213e;
+            border-right: 1px solid #0f3460; overflow-y: auto; flex-shrink: 0;
+        }
+        .sidebar-section { padding: 14px; }
+        .sidebar-section h4 {
+            font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+            color: #555; margin-bottom: 8px;
+        }
+        .sidebar-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 10px; border-radius: 5px; cursor: pointer;
+            font-size: 12px; transition: background 0.15s; margin-bottom: 1px;
+        }
+        .sidebar-item:hover { background: #1a2744; }
+        .sidebar-item.active { background: #0f3460; color: #fff; }
+        .sidebar-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+        .sidebar-count { margin-left: auto; font-size: 10px; color: #444; }
+        .sidebar-divider { height: 1px; background: #0f3460; margin: 4px 14px; }
+
+        /* ---- CONTENT ---- */
+        .content { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+        .view { display: none; flex: 1; }
+        .view.active { display: flex; flex-direction: column; }
+
+        /* ---- WHEEL ROW ---- */
+        .wheel-row {
+            display: flex; align-items: flex-start; justify-content: center;
+            padding: 16px 20px; gap: 16px; flex-shrink: 0;
+        }
+
+        /* ---- RIGHT PANEL: STATUS FILTER ---- */
+        .status-panel { min-width: 200px; max-width: 240px; flex-shrink: 0; }
+        .status-filter-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 7px 12px; border-radius: 6px; cursor: pointer;
+            font-size: 12px; transition: all 0.15s; margin-bottom: 2px;
+            border-left: 3px solid transparent;
+        }
+        .status-filter-item:hover { background: #1a2744; }
+        .status-filter-item.active { background: #0f1a30; }
+        .status-filter-item .sf-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .status-filter-item .sf-label { flex: 1; }
+        .status-filter-item .sf-count {
+            background: #0f1a30; padding: 1px 7px; border-radius: 8px; font-size: 10px; color: #888;
+        }
+        .status-filter-item.active .sf-count { background: #16213e; }
+        .status-drill {
+            margin-top: 8px; max-height: 380px; overflow-y: auto;
+            background: #0f1a30; border-radius: 8px; padding: 10px; font-size: 11px; display: none;
+        }
+        .status-drill.open { display: block; }
+        .sd-category { margin-bottom: 8px; }
+        .sd-cat-header {
+            display: flex; align-items: center; gap: 6px;
+            padding: 4px 6px; border-radius: 4px; cursor: pointer;
+            font-weight: 600; color: #a0c4ff; font-size: 11px;
+        }
+        .sd-cat-header:hover { background: #16213e; }
+        .sd-cat-count { font-weight: 400; color: #555; font-size: 10px; }
+        .sd-indicator { padding: 4px 6px 4px 18px; cursor: pointer; border-radius: 3px; color: #ccc; }
+        .sd-indicator:hover { background: #16213e; }
+        .sd-ind-code { font-weight: 600; color: #e0e0e0; }
+        .sd-ind-step { color: #888; font-size: 10px; }
+        .sd-ind-comment { color: #777; font-size: 10px; font-style: italic; margin-top: 2px; }
+
+        /* ---- SUMMARY CARDS ---- */
+        .summary-cards {
+            display: flex; gap: 10px; justify-content: center;
+            padding: 14px 20px 0; flex-wrap: wrap; flex-shrink: 0;
+        }
+        .summary-card {
+            background: #16213e; border-radius: 8px;
+            padding: 10px 18px; text-align: center; min-width: 90px;
+        }
+        .summary-card .number { font-size: 22px; font-weight: 700; }
+        .summary-card .label { font-size: 10px; color: #888; margin-top: 1px; }
+
+        /* ---- SVG ---- */
+        .step-ellipse { cursor: pointer; transition: filter 0.2s; }
+        .step-ellipse:hover { filter: brightness(1.2) drop-shadow(0 0 8px rgba(255,255,255,0.3)); }
+        .step-label { pointer-events: none; font-weight: 600; font-size: 12px; fill: #fff; text-anchor: middle; dominant-baseline: central; }
+        .arrow-path { fill: none; stroke: #3a7bd5; stroke-width: 2.5; }
+        .center-title { font-size: 12px; fill: #777; text-anchor: middle; }
+        .center-date { font-size: 18px; fill: #fff; text-anchor: middle; font-weight: 700; }
+        .comment-line { stroke: #444; stroke-width: 1; stroke-dasharray: 4,3; }
+        .comment-box-bg { fill: #16213e; stroke: #2a2a4a; stroke-width: 1; }
+        .comment-text { fill: #bbb; font-size: 10px; }
+        .comment-step-label { fill: #a0c4ff; font-size: 10px; font-weight: 600; }
+        .comment-badge-text { fill: #fff; font-size: 8px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+
+        /* ---- INDICATOR HEADER ---- */
+        .indicator-header { text-align: center; padding: 12px 20px 4px; flex-shrink: 0; }
+        .indicator-header h2 { font-size: 18px; color: #fff; margin-bottom: 2px; }
+        .indicator-header .subtitle { font-size: 13px; color: #777; }
+        .badge { display: inline-block; font-size: 10px; padding: 2px 9px; border-radius: 10px; margin-top: 6px; }
+        .badge-sla { background: #0f3460; color: #a0c4ff; }
+
+        /* ---- CONDITIONS ---- */
+        .conditions-area {
+            display: flex; gap: 16px; padding: 0 40px 16px;
+            justify-content: center; flex-shrink: 0;
+        }
+        .condition-box {
+            flex: 1; max-width: 420px; background: #16213e; border-radius: 8px;
+            padding: 12px 16px; border-left: 3px solid #3a7bd5;
+        }
+        .condition-box h5 {
+            font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+            color: #666; margin-bottom: 6px;
+        }
+        .condition-box p { font-size: 12px; color: #ccc; line-height: 1.5; }
+        .condition-box .edit-link {
+            font-size: 10px; color: #a0c4ff; cursor: pointer; margin-top: 6px; display: inline-block;
+        }
+        .condition-box .edit-link:hover { text-decoration: underline; }
+
+        /* ---- DRILL TABLE ---- */
+        .drill-area { padding: 0 20px 16px; overflow-y: auto; }
+        .drill-table { width: 100%; max-width: 800px; margin: 0 auto; border-collapse: collapse; }
+        .drill-table th { background: #0f3460; padding: 8px 12px; text-align: left; font-size: 12px; color: #a0c4ff; }
+        .drill-table td { padding: 7px 12px; border-bottom: 1px solid #1a1a2e; font-size: 12px; cursor: pointer; transition: background 0.15s; }
+        .drill-table tr:hover td { background: #1a2744; }
+        .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+        .drill-edit-link {
+            font-size: 11px; color: #e94560; cursor: pointer; margin-left: 16px; font-weight: 400;
+        }
+        .drill-edit-link:hover { text-decoration: underline; }
+
+        /* ---- HISTORY PANEL ---- */
+        .history-panel { min-width: 140px; flex-shrink: 0; }
+        .history-panel h4 { font-size: 10px; color: #555; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+        .history-date {
+            padding: 5px 8px; font-size: 12px; cursor: pointer;
+            border-radius: 4px; margin-bottom: 2px; transition: background 0.15s;
+        }
+        .history-date:hover { background: #1a2744; }
+        .history-date.active { background: #0f3460; color: #fff; }
+
+        /* ---- MODAL ---- */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7); z-index: 100;
+            justify-content: center; align-items: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: #16213e; border-radius: 12px; padding: 22px;
+            width: 480px; max-width: 92vw; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .modal h3 { margin-bottom: 14px; color: #e94560; font-size: 16px; }
+        .modal label { font-size: 12px; color: #999; display: block; margin-bottom: 5px; }
+        .modal textarea {
+            width: 100%; height: 80px; background: #0f1a30; border: 1px solid #333;
+            border-radius: 6px; color: #e0e0e0; padding: 8px; font-family: inherit;
+            font-size: 12px; resize: vertical; margin-bottom: 12px;
+        }
+        .color-picker { display: flex; gap: 8px; margin-bottom: 16px; }
+        .color-btn {
+            width: 34px; height: 34px; border-radius: 8px;
+            border: 3px solid transparent; cursor: pointer; transition: all 0.15s;
+        }
+        .color-btn:hover { transform: scale(1.1); }
+        .color-btn.selected { border-color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.3); }
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+        .btn { padding: 7px 18px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; }
+        .btn-primary { background: #e94560; color: #fff; }
+        .btn-secondary { background: #333; color: #ccc; }
+        .btn:hover { filter: brightness(1.15); }
+
+        /* Modal tabs */
+        .modal-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+        .modal-tab {
+            padding: 7px 14px; border-radius: 6px 6px 0 0; cursor: pointer;
+            font-size: 12px; font-weight: 600; background: #0f1a30; color: #555;
+            border-bottom: 2px solid transparent; transition: all 0.15s;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .modal-tab:hover { color: #aaa; }
+        .modal-tab.active { background: #1a2744; color: #fff; border-bottom-color: #e94560; }
+        .tab-badge {
+            display: inline-block; width: 18px; height: 16px; border-radius: 3px;
+            text-align: center; line-height: 16px; font-size: 10px; color: #fff; font-weight: 700;
+        }
+        .modal-note {
+            font-size: 11px; color: #666; font-style: italic; margin-bottom: 10px;
+            padding: 6px 10px; background: #0f1a30; border-radius: 4px; border-left: 3px solid #333;
+        }
+        .btn-clear-layer {
+            background: none; border: 1px dashed #444; color: #777; padding: 5px 14px;
+            border-radius: 5px; cursor: pointer; font-size: 11px; margin-bottom: 14px; display: block;
+        }
+        .btn-clear-layer:hover { border-color: #e94560; color: #e94560; }
+
+        /* ---- KANBAN ---- */
+        .kanban-area { padding: 16px 20px; overflow-y: auto; flex: 1; }
+        .kanban-board { display: flex; gap: 12px; overflow-x: auto; }
+        .kanban-column { min-width: 200px; flex: 1; background: #16213e; border-radius: 10px; padding: 12px; }
+        .kanban-column h4 {
+            font-size: 11px; color: #777; text-transform: uppercase;
+            letter-spacing: 1px; margin-bottom: 10px; padding-bottom: 7px; border-bottom: 2px solid #222;
+        }
+        .kanban-column h4 .count { background: #333; border-radius: 8px; padding: 1px 7px; font-size: 10px; margin-left: 5px; }
+        .kanban-card {
+            background: #0f1a30; border-radius: 7px; padding: 10px;
+            margin-bottom: 7px; border-left: 3px solid #3a7bd5; cursor: grab; transition: transform 0.15s;
+        }
+        .kanban-card:hover { transform: translateY(-2px); }
+        .kanban-card .card-title { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+        .kanban-card .card-meta { font-size: 10px; color: #555; }
+        .kanban-card .card-step {
+            display: inline-block; font-size: 9px; background: #1a3050;
+            padding: 1px 7px; border-radius: 3px; margin-top: 4px; color: #a0c4ff;
+        }
+
+        .hint { text-align: center; color: #444; font-size: 11px; padding: 4px; flex-shrink: 0; }
+
+        /* COLORS */
+        .c-grey { background: #6b7280; } .c-green { background: #22c55e; }
+        .c-yellow { background: #eab308; } .c-orange { background: #f97316; }
+        .c-red { background: #dc2626; } .c-none { background: #333; }
+        .sc-green .number { color: #22c55e; } .sc-yellow .number { color: #eab308; }
+        .sc-orange .number { color: #f97316; } .sc-red .number { color: #dc2626; }
+        .sc-grey .number { color: #6b7280; }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <h1>ROUE CSI</h1>
+    <div class="breadcrumb" id="breadcrumb"><span class="current">Vue Globale</span></div>
+</div>
+
+<div class="main-layout">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="content">
+
+        <!-- === VUE GLOBALE === -->
+        <div class="view active" id="view-global">
+            <div class="summary-cards">
+                <div class="summary-card sc-green"><div class="number">12</div><div class="label">Conformes</div></div>
+                <div class="summary-card sc-yellow"><div class="number">18</div><div class="label">En cours</div></div>
+                <div class="summary-card sc-orange"><div class="number">9</div><div class="label">Warning</div></div>
+                <div class="summary-card sc-red"><div class="number">3</div><div class="label">Blocage</div></div>
+                <div class="summary-card sc-grey"><div class="number">7</div><div class="label">Non evalues</div></div>
+            </div>
+            <div class="wheel-row">
+                <svg id="wheel-global" width="440" height="440" viewBox="0 0 440 440"></svg>
+                <div>
+                    <div class="status-panel" id="sp-global"></div>
+                    <div class="status-drill" id="sd-global"></div>
+                </div>
+            </div>
+            <div class="hint">Cliquez sur une etape pour voir la repartition par categorie</div>
+            <div class="drill-area" id="global-drill-area" style="display:none">
+                <h3 style="text-align:center;margin-bottom:12px;color:#a0c4ff;font-size:14px" id="global-drill-title"></h3>
+                <table class="drill-table"><thead><tr><th>Categorie</th><th>Statut</th><th>Indicateurs</th></tr></thead><tbody id="global-drill-body"></tbody></table>
+            </div>
+        </div>
+
+        <!-- === VUE CATEGORIE === -->
+        <div class="view" id="view-category">
+            <div class="indicator-header">
+                <h2>Process Incident</h2>
+                <div class="subtitle">10 indicateurs</div>
+            </div>
+            <div class="wheel-row">
+                <svg id="wheel-category" width="440" height="440" viewBox="0 0 440 440"></svg>
+                <div>
+                    <div class="status-panel" id="sp-category"></div>
+                    <div class="status-drill" id="sd-category"></div>
+                </div>
+            </div>
+            <div class="hint">Cliquez sur une etape pour voir la repartition par indicateur</div>
+            <div class="drill-area" id="category-drill-area" style="display:none">
+                <h3 style="text-align:center;margin-bottom:12px;color:#a0c4ff;font-size:14px" id="category-drill-title"></h3>
+                <table class="drill-table"><thead><tr><th>Indicateur</th><th>Description</th><th>Statut</th></tr></thead><tbody id="category-drill-body"></tbody></table>
+            </div>
+        </div>
+
+        <!-- === VUE INDICATEUR === -->
+        <div class="view" id="view-indicator">
+            <div class="indicator-header">
+                <h2>4.1.3. - ITR_QUAL_REF_TECH</h2>
+                <div class="subtitle">Qualite de la gestion des referentiels techniques</div>
+                <span class="badge badge-sla">SLA</span>
+            </div>
+            <div class="wheel-row">
+                <svg id="wheel-indicator" width="860" height="530" viewBox="0 0 860 530"></svg>
+                <div>
+                    <div class="status-panel" id="sp-indicator"></div>
+                    <div class="status-drill" id="sd-indicator"></div>
+                </div>
+                <div class="history-panel">
+                    <h4>Historique</h4>
+                    <div class="history-date active">16/02/2026</div>
+                    <div class="history-date">15/01/2026</div>
+                    <div class="history-date">12/12/2025</div>
+                    <div class="history-date">20/11/2025</div>
+                </div>
+            </div>
+            <div class="conditions-area">
+                <div class="condition-box">
+                    <h5>Condition de ciblage</h5>
+                    <p>Liste des donnees des referentiels techniques</p>
+                    <span class="edit-link">Modifier</span>
+                </div>
+                <div class="condition-box">
+                    <h5>Condition de conformite</h5>
+                    <p>Nombre d'erreurs &lt;= 5</p>
+                    <span class="edit-link">Modifier</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- === VUE KANBAN === -->
+        <div class="view" id="view-kanban">
+            <div class="indicator-header">
+                <h2>Actions - ITR_QUAL_REF_TECH</h2>
+                <div class="subtitle">Qualite de la gestion des referentiels techniques</div>
+            </div>
+            <div class="kanban-area">
+                <div class="kanban-board">
+                    <div class="kanban-column">
+                        <h4>A faire <span class="count">3</span></h4>
+                        <div class="kanban-card"><div class="card-title">Obtenir la liste exhaustive des referentiels</div><div class="card-meta">Assigne : Amin</div><div class="card-step">COLLECTE</div></div>
+                        <div class="kanban-card"><div class="card-title">Definir le format de remontee</div><div class="card-meta">Assigne : Pascal G.</div><div class="card-step">DATA PREP</div></div>
+                        <div class="kanban-card"><div class="card-title">Controle qualite des donnees</div><div class="card-meta">Non assigne</div><div class="card-step">DATA QUALITY</div></div>
+                    </div>
+                    <div class="kanban-column">
+                        <h4>En cours <span class="count">2</span></h4>
+                        <div class="kanban-card" style="border-left-color:#eab308"><div class="card-title">Cadrage patrimoine documentaire</div><div class="card-meta">Assigne : Gisele</div><div class="card-step">Ce qu'on PEUT</div></div>
+                        <div class="kanban-card" style="border-left-color:#eab308"><div class="card-title">Calcul manuel indicateur</div><div class="card-meta">Assigne : Equipe</div><div class="card-step">COLLECTE</div></div>
+                    </div>
+                    <div class="kanban-column">
+                        <h4>A valider <span class="count">1</span></h4>
+                        <div class="kanban-card" style="border-left-color:#a0c4ff"><div class="card-title">Identifier les sources de donnees</div><div class="card-meta">Soumis par : P. Dupont</div><div class="card-step">Ce qu'on PEUT</div></div>
+                    </div>
+                    <div class="kanban-column">
+                        <h4>Termine <span class="count">1</span></h4>
+                        <div class="kanban-card" style="border-left-color:#22c55e"><div class="card-title">Definir criteres de conformite</div><div class="card-meta">Realise : 10/01/2026</div><div class="card-step">Ce qu'on VEUT</div></div>
+                    </div>
+                    <div class="kanban-column">
+                        <h4>Rejete <span class="count">1</span></h4>
+                        <div class="kanban-card" style="border-left-color:#dc2626"><div class="card-title">Export automatise SCCM</div><div class="card-meta">Rejete : 05/01/2026</div><div class="card-step">COLLECTE</div><div class="card-meta" style="color:#dc2626;margin-top:4px">Motif : hors perimetre actuel</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+        <h3 id="modal-title"></h3>
+        <div class="modal-tabs" id="modal-tabs">
+            <div class="modal-tab" data-layer="global" onclick="switchModalTab('global')">
+                <span class="tab-badge" style="background:#e94560">G</span> Global
+            </div>
+            <div class="modal-tab" data-layer="categorie" onclick="switchModalTab('categorie')">
+                <span class="tab-badge" style="background:#3a7bd5">C</span> Categorie
+            </div>
+            <div class="modal-tab" data-layer="indicateur" onclick="switchModalTab('indicateur')">
+                <span class="tab-badge" style="background:#8b5cf6">I</span> Indicateur
+            </div>
+        </div>
+        <div class="modal-note" id="modal-note"></div>
+        <label>Statut</label>
+        <div class="color-picker">
+            <div class="color-btn c-none" onclick="selColor(this)" data-color="none" title="Aucun (vider)"></div>
+            <div class="color-btn c-grey" onclick="selColor(this)" data-color="grey" title="Non evalue"></div>
+            <div class="color-btn c-green" onclick="selColor(this)" data-color="green" title="Valide"></div>
+            <div class="color-btn c-yellow" onclick="selColor(this)" data-color="yellow" title="En cours"></div>
+            <div class="color-btn c-orange" onclick="selColor(this)" data-color="orange" title="Warning"></div>
+            <div class="color-btn c-red" onclick="selColor(this)" data-color="red" title="Blocage"></div>
+        </div>
+        <label>Commentaire</label>
+        <textarea id="modal-comment"></textarea>
+        <button class="btn-clear-layer" onclick="clearCurrentLayer()">Vider cette couche</button>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+            <button class="btn btn-primary" onclick="saveModal()">Enregistrer</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// =============================================
+// DATA
+// =============================================
+const STEPS = [
+    { label:"Ce qu'on\nVEUT", short:"Ce qu'on VEUT", tooltip:"Definir l'objectif de mesure :\nquel resultat attend-on de cet indicateur ?" },
+    { label:"Ce qu'on\nPEUT", short:"Ce qu'on PEUT", tooltip:"Identifier ce qui est techniquement\nmesurable avec les outils disponibles" },
+    { label:"COLLECTE", short:"COLLECTE", tooltip:"Collecter les donnees brutes\nnecessaires au calcul de l'indicateur" },
+    { label:"DATA\nPREP", short:"DATA PREP", tooltip:"Preparer et transformer les donnees\npour les rendre exploitables" },
+    { label:"DATA\nQUALITY", short:"DATA QUALITY", tooltip:"Verifier la qualite, la coherence\net la fiabilite des donnees" },
+    { label:"DATA VIZ\n& USAGE", short:"DATA VIZ & USAGE", tooltip:"Visualiser et exploiter les resultats\npour le pilotage operationnel" },
+    { label:"BILAN", short:"BILAN", tooltip:"Bilan de l'etape : revue des acquis\net identification des axes d'amelioration" }
+];
+
+const COL = {
+    grey:  {f:'#6b7280',l:'Non evalue'},  green: {f:'#22c55e',l:'Valide'},
+    yellow:{f:'#eab308',l:'En cours'},     orange:{f:'#f97316',l:'Warning'},
+    red:   {f:'#dc2626',l:'Blocage'}
+};
+const STATUS_ORDER = ['green','yellow','orange','red','grey'];
+
+const LAYERS = {
+    global:     {badge:'G', color:'#e94560', label:'Global',     note:'Ce statut/commentaire sera propage a TOUS les indicateurs pour cette etape'},
+    categorie:  {badge:'C', color:'#3a7bd5', label:'Categorie',  note:'Ce statut/commentaire sera propage aux indicateurs de cette categorie pour cette etape'},
+    indicateur: {badge:'I', color:'#8b5cf6', label:'Indicateur', note:'Statut/commentaire specifique a cet indicateur uniquement'}
+};
+
+const CATEGORIES = [
+    {name:'SLA Transverse', count:12, worst:'orange'},
+    {name:'Service Desk', count:8, worst:'orange'},
+    {name:'Process Incident', count:10, worst:'red'},
+    {name:'Process Demande', count:7, worst:'yellow'},
+    {name:'Gestion des stocks', count:3, worst:'green'},
+    {name:'Marche de location', count:2, worst:'grey'},
+    {name:'Pilotage', count:7, worst:'yellow'}
+];
+
+const CAT_INDICATORS = [
+    {code:'IQ_INC_1',      desc:"Resolution incident 'Bloque'",    color:'green'},
+    {code:'IQ_INC_1A',     desc:"Resolution 'Bloque' (4h)",        color:'green'},
+    {code:'IQ_INC_1B',     desc:"Resolution 'Bloque' (8h)",        color:'green'},
+    {code:'IQ_INC_2',      desc:"Resolution incident 'Gene'",      color:'green'},
+    {code:'IQ_INC_2A',     desc:"Resolution 'Gene' (12h)",         color:'yellow'},
+    {code:'IQ_INC_2B',     desc:"Resolution 'Gene' (24h)",         color:'green'},
+    {code:'IQ_INC_NON_RES',desc:"Non-resolution des tickets",      color:'red'},
+    {code:'IQ_INC_ESCAL',  desc:"Delais et qualite de l'escalade", color:'orange'},
+    {code:'IQ_INC_REOPEN', desc:"Reouverture des incidents",        color:'yellow'},
+    {code:'IQ_INC_PROP',   desc:"Propositions amelioration",        color:'grey'}
+];
+
+const GLOBAL_STATUS_DETAIL = {
+    red: [
+        {cat:'Process Incident', indicators:[
+            {code:'IQ_INC_NON_RES', steps:[{s:'COLLECTE',c:'Aucune source de donnees identifiee'},{s:'DATA PREP',c:'Bloque par la collecte'}]}
+        ]},
+        {cat:'Pilotage', indicators:[
+            {code:'IP_ENVIRON_TRAVAIL', steps:[{s:'Ce qu\'on PEUT',c:'Definition non clarifiee'}]},
+            {code:'IP_PDT_REBOOT', steps:[{s:'COLLECTE',c:'RGPD : pas de remontee user possible'}]}
+        ]}
+    ],
+    orange: [
+        {cat:'SLA Transverse', indicators:[
+            {code:'ITR_QUAL_REF_TECH', steps:[{s:'Ce qu\'on PEUT',c:'Pas d\'appareil de mesure dedie'},{s:'COLLECTE',c:'Mesures dans fichiers Excel'},{s:'BILAN',c:'Lie au chantier patrimoine'}]},
+            {code:'ITR_REP_PROJET_TSD', steps:[{s:'DATA PREP',c:'Format non defini'}]}
+        ]},
+        {cat:'Service Desk', indicators:[
+            {code:'ISD_APPEL_DECROCHE', steps:[{s:'DATA QUALITY',c:'Temps plancher en attente'}]}
+        ]}
+    ],
+    yellow: [
+        {cat:'Process Demande', indicators:[
+            {code:'IQ_REQ_TRAITEMENT', steps:[{s:'COLLECTE',c:'Requetes ServiceNow en cours de dev'}]},
+            {code:'IQ_REQ_POSTE_NEW', steps:[{s:'DATA PREP',c:'Mapping des categories en cours'}]}
+        ]},
+        {cat:'Pilotage', indicators:[
+            {code:'IP_TENUE_COMITE', steps:[{s:'DATA VIZ & USAGE',c:'Solution Excel en cours'}]}
+        ]}
+    ],
+    green: [
+        {cat:'Gestion des stocks', indicators:[
+            {code:'IQ_PARC_STOCK_RUN', steps:[{s:'Toutes etapes',c:''}]},
+            {code:'IQ_PARC_STOCK', steps:[{s:'Toutes etapes',c:''}]}
+        ]}
+    ],
+    grey: [
+        {cat:'Marche de location', indicators:[
+            {code:'IQ_LOC_RESTIT', steps:[{s:'Non demarre',c:''}]},
+            {code:'IQ_LOC_PERDU', steps:[{s:'Non demarre',c:''}]}
+        ]}
+    ]
+};
+
+const globalData = [
+    {color:'green'},{color:'orange'},{color:'red'},
+    {color:'yellow'},{color:'grey'},{color:'yellow'},{color:'orange'}
+];
+const categoryData = [
+    {color:'green'},{color:'green'},{color:'red'},
+    {color:'yellow'},{color:'grey'},{color:'grey'},{color:'yellow'}
+];
+
+// INDICATOR DATA: 3 layers per step
+const indicatorData = [
+    { // 0: Ce qu'on VEUT
+        global:     {color:null, comment:''},
+        categorie:  {color:null, comment:''},
+        indicateur: {color:'green', comment:''}
+    },
+    { // 1: Ce qu'on PEUT
+        global:     {color:null, comment:''},
+        categorie:  {color:null, comment:''},
+        indicateur: {color:'orange', comment:"Pas d'appareil de mesure dedie.\nCalcul manuel dans un premier temps."}
+    },
+    { // 2: COLLECTE
+        global:     {color:'red', comment:"Blocage acces BDD\npour tous les indicateurs"},
+        categorie:  {color:null, comment:''},
+        indicateur: {color:'orange', comment:"Mesures dans fichiers Excel.\nListe des referentiels a fournir."}
+    },
+    { // 3: DATA PREP
+        global:     {color:null, comment:''},
+        categorie:  {color:'yellow', comment:"Outils de preparation\nen cours de deploiement"},
+        indicateur: {color:null, comment:''}
+    },
+    { // 4: DATA QUALITY
+        global:     {color:null, comment:''},
+        categorie:  {color:null, comment:''},
+        indicateur: {color:'grey', comment:''}
+    },
+    { // 5: DATA VIZ & USAGE
+        global:     {color:null, comment:''},
+        categorie:  {color:null, comment:''},
+        indicateur: {color:'yellow', comment:''}
+    },
+    { // 6: BILAN
+        global:     {color:null, comment:''},
+        categorie:  {color:'orange', comment:"Chantier patrimoine\ndocumentaire en cours"},
+        indicateur: {color:'orange', comment:"Voir dates avec equipe.\nPlanification a affiner."}
+    }
+];
+
+// =============================================
+// HELPERS
+// =============================================
+function getWorstColor(stepData){
+    const order = {grey:0, green:1, yellow:2, orange:3, red:4};
+    let worst=-1, worstColor='grey';
+    ['global','categorie','indicateur'].forEach(layer=>{
+        const c = stepData[layer].color;
+        if(c && order[c]!==undefined && order[c]>worst){ worst=order[c]; worstColor=c; }
+    });
+    return worstColor;
+}
+
+function getLayerComments(stepData){
+    const result = [];
+    ['global','categorie','indicateur'].forEach(key=>{
+        const d = stepData[key];
+        if(d.comment){
+            result.push({
+                key: key,
+                badge: LAYERS[key].badge,
+                badgeColor: LAYERS[key].color,
+                statusColor: d.color ? COL[d.color].f : '#333',
+                lines: d.comment.split('\n')
+            });
+        }
+    });
+    return result;
+}
+
+// =============================================
+// SVG HELPER
+// =============================================
+const svgNS = 'http://www.w3.org/2000/svg';
+function mkSvg(t){ return document.createElementNS(svgNS,t); }
+
+// =============================================
+// DRAW SIMPLE WHEEL (global/category)
+// =============================================
+function drawWheel(id, data, opts={}){
+    const svg=document.getElementById(id); svg.innerHTML='';
+    const cx=220,cy=220,R=155,rx=48,ry=33,sa=-90;
+    const defs=mkSvg('defs');
+    defs.innerHTML=`<marker id="ah-${id}" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#3a7bd5"/></marker>`;
+    svg.appendChild(defs);
+    const pos=[];
+    for(let i=0;i<7;i++){const a=(sa+i*360/7)*Math.PI/180; pos.push({x:cx+R*Math.cos(a),y:cy+R*Math.sin(a)});}
+    // arcs
+    for(let i=0;i<7;i++){
+        const a1=(sa+i*360/7+19)*Math.PI/180, a2=(sa+(i+1)*360/7-19)*Math.PI/180;
+        const p=mkSvg('path');
+        p.setAttribute('d',`M${cx+R*Math.cos(a1)} ${cy+R*Math.sin(a1)} A${R} ${R} 0 0 1 ${cx+R*Math.cos(a2)} ${cy+R*Math.sin(a2)}`);
+        p.setAttribute('class','arrow-path'); p.setAttribute('marker-end',`url(#ah-${id})`);
+        svg.appendChild(p);
+    }
+    // ellipses
+    for(let i=0;i<7;i++){
+        const g=mkSvg('g'); g.setAttribute('class','step-ellipse');
+        // tooltip
+        const titleEl=mkSvg('title');
+        titleEl.textContent=STEPS[i].short+' : '+STEPS[i].tooltip.replace(/\n/g,' ');
+        g.appendChild(titleEl);
+        if(opts.onClick) g.onclick=()=>opts.onClick(i);
+        const el=mkSvg('ellipse');
+        el.setAttribute('cx',pos[i].x); el.setAttribute('cy',pos[i].y);
+        el.setAttribute('rx',rx); el.setAttribute('ry',ry);
+        el.setAttribute('fill',COL[data[i].color].f);
+        el.setAttribute('stroke','rgba(255,255,255,0.12)'); el.setAttribute('stroke-width','2');
+        g.appendChild(el);
+        const lines=STEPS[i].label.split('\n');
+        const txt=mkSvg('text'); txt.setAttribute('class','step-label');
+        txt.setAttribute('x',pos[i].x); txt.setAttribute('y',pos[i].y-(lines.length-1)*7);
+        lines.forEach((l,li)=>{const ts=mkSvg('tspan'); ts.setAttribute('x',pos[i].x); ts.setAttribute('dy',li?'14':'0'); ts.textContent=l; txt.appendChild(ts);});
+        g.appendChild(txt); svg.appendChild(g);
+    }
+    if(opts.c1){const t=mkSvg('text');t.setAttribute('class','center-title');t.setAttribute('x',cx);t.setAttribute('y',cy-8);t.textContent=opts.c1;svg.appendChild(t);}
+    if(opts.c2){const t=mkSvg('text');t.setAttribute('class','center-date');t.setAttribute('x',cx);t.setAttribute('y',cy+16);t.textContent=opts.c2;svg.appendChild(t);}
+}
+
+// =============================================
+// DRAW INDICATOR WHEEL (with 3-layer comments)
+// =============================================
+function drawIndWheel(){
+    const svg=document.getElementById('wheel-indicator'); svg.innerHTML='';
+    const cx=400,cy=260,R=150,rx=48,ry=33,sa=-90;
+    const defs=mkSvg('defs');
+    defs.innerHTML=`<marker id="ah-ind" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#3a7bd5"/></marker>`;
+    svg.appendChild(defs);
+    const pos=[];
+    for(let i=0;i<7;i++){const a=(sa+i*360/7)*Math.PI/180; pos.push({x:cx+R*Math.cos(a),y:cy+R*Math.sin(a)});}
+    // arcs
+    for(let i=0;i<7;i++){
+        const a1=(sa+i*360/7+19)*Math.PI/180, a2=(sa+(i+1)*360/7-19)*Math.PI/180;
+        const p=mkSvg('path');
+        p.setAttribute('d',`M${cx+R*Math.cos(a1)} ${cy+R*Math.sin(a1)} A${R} ${R} 0 0 1 ${cx+R*Math.cos(a2)} ${cy+R*Math.sin(a2)}`);
+        p.setAttribute('class','arrow-path'); p.setAttribute('marker-end','url(#ah-ind)');
+        svg.appendChild(p);
+    }
+
+    // Comment slots: left well away from wheel, right well away from wheel
+    const slotDefs = {
+        6:{x:4,   w:180, side:'left'},
+        5:{x:4,   w:180, side:'left'},
+        0:{x:4,   w:180, side:'left'},
+        1:{x:635, w:180, side:'right'},
+        2:{x:635, w:180, side:'right'},
+        3:{x:635, w:180, side:'right'}
+    };
+    const leftSteps=[6,5,0], rightSteps=[1,2,3];
+
+    // Calculate comment box heights and positions
+    function calcBoxHeight(stepIdx){
+        const layers = getLayerComments(indicatorData[stepIdx]);
+        if(layers.length===0) return 0;
+        let h = 16; // step label + padding
+        layers.forEach((layer,li)=>{
+            h += 15; // badge line
+            h += (layer.lines.length-1)*12; // extra lines
+            if(li < layers.length-1) h += 4; // spacing between layers
+        });
+        h += 6; // bottom padding
+        return h;
+    }
+
+    function positionSlots(stepList){
+        let y = 8;
+        const positions = [];
+        stepList.forEach(si=>{
+            const h = calcBoxHeight(si);
+            if(h>0){
+                positions.push({stepIdx:si, y:y, h:h});
+                y += h + 10;
+            }
+        });
+        return positions;
+    }
+
+    const leftPositions = positionSlots(leftSteps);
+    const rightPositions = positionSlots(rightSteps);
+    const allPositions = [...leftPositions, ...rightPositions];
+
+    // Draw comment boxes
+    allPositions.forEach(slot=>{
+        const si = slot.stepIdx;
+        const sd = slotDefs[si];
+        if(!sd) return;
+        const layers = getLayerComments(indicatorData[si]);
+        if(layers.length===0) return;
+
+        const bh = slot.h;
+        const bx = sd.x, by = slot.y, bw = sd.w;
+
+        // connector line (outside group, drawn behind)
+        const ln = mkSvg('line');
+        const ax = sd.side==='left' ? bx+bw : bx;
+        const ay = by + bh/2;
+        ln.setAttribute('x1',ax); ln.setAttribute('y1',ay);
+        ln.setAttribute('x2',pos[si].x); ln.setAttribute('y2',pos[si].y);
+        ln.setAttribute('class','comment-line'); svg.appendChild(ln);
+
+        // group wrapping the entire comment box for tooltip + click
+        const grp = mkSvg('g');
+        grp.style.cursor = 'pointer';
+        grp.onclick = ()=>openModal(si,'indicateur');
+        // build full tooltip text from all layers
+        const tooltipParts = [];
+        layers.forEach(layer=>{
+            tooltipParts.push('['+layer.badge+'] '+layer.lines.join('\n      '));
+        });
+        const grpTitle = mkSvg('title');
+        grpTitle.textContent = STEPS[si].short+'\n'+tooltipParts.join('\n');
+        grp.appendChild(grpTitle);
+
+        // box background
+        const r = mkSvg('rect');
+        r.setAttribute('x',bx); r.setAttribute('y',by); r.setAttribute('width',bw); r.setAttribute('height',bh);
+        r.setAttribute('class','comment-box-bg'); r.setAttribute('rx','5');
+        grp.appendChild(r);
+
+        // color bar (worst color)
+        const wc = getWorstColor(indicatorData[si]);
+        const bar = mkSvg('rect');
+        bar.setAttribute('x',bx); bar.setAttribute('y',by); bar.setAttribute('width',3); bar.setAttribute('height',bh);
+        bar.setAttribute('fill',COL[wc].f); bar.setAttribute('rx','1'); grp.appendChild(bar);
+
+        // step label
+        const sl = mkSvg('text'); sl.setAttribute('class','comment-step-label');
+        sl.setAttribute('x',bx+10); sl.setAttribute('y',by+12); sl.textContent=STEPS[si].short;
+        grp.appendChild(sl);
+
+        // layer comments with badges
+        let cy2 = by + 24;
+        layers.forEach((layer,li)=>{
+            // badge rect
+            const br = mkSvg('rect');
+            br.setAttribute('x',bx+8); br.setAttribute('y',cy2-9); br.setAttribute('width',16); br.setAttribute('height',13);
+            br.setAttribute('rx','2'); br.setAttribute('fill',layer.badgeColor); grp.appendChild(br);
+            // badge text
+            const bt = mkSvg('text'); bt.setAttribute('class','comment-badge-text');
+            bt.setAttribute('x',bx+16); bt.setAttribute('y',cy2-2.5); bt.textContent=layer.badge; grp.appendChild(bt);
+            // first line
+            const t1 = mkSvg('text'); t1.setAttribute('class','comment-text');
+            t1.setAttribute('x',bx+28); t1.setAttribute('y',cy2);
+            const maxLen = Math.floor((bw-36)/5.5);
+            t1.textContent = layer.lines[0].length>maxLen ? layer.lines[0].substring(0,maxLen-2)+'..' : layer.lines[0];
+            grp.appendChild(t1);
+            cy2 += 12;
+            // additional lines
+            for(let j=1; j<layer.lines.length; j++){
+                const tn = mkSvg('text'); tn.setAttribute('class','comment-text');
+                tn.setAttribute('x',bx+28); tn.setAttribute('y',cy2);
+                tn.textContent = layer.lines[j].length>maxLen ? layer.lines[j].substring(0,maxLen-2)+'..' : layer.lines[j];
+                grp.appendChild(tn);
+                cy2 += 12;
+            }
+            cy2 += 4; // spacing between layers
+        });
+        svg.appendChild(grp);
+    });
+
+    // ellipses on top
+    for(let i=0;i<7;i++){
+        const wc = getWorstColor(indicatorData[i]);
+        const g=mkSvg('g'); g.setAttribute('class','step-ellipse');
+        g.onclick=()=>openModal(i,'indicateur');
+        // tooltip
+        const titleEl=mkSvg('title');
+        titleEl.textContent=STEPS[i].short+' : '+STEPS[i].tooltip.replace(/\n/g,' ');
+        g.appendChild(titleEl);
+        const el=mkSvg('ellipse');
+        el.setAttribute('cx',pos[i].x); el.setAttribute('cy',pos[i].y);
+        el.setAttribute('rx',rx); el.setAttribute('ry',ry);
+        el.setAttribute('fill',COL[wc].f);
+        el.setAttribute('stroke','rgba(255,255,255,0.12)'); el.setAttribute('stroke-width','2');
+        g.appendChild(el);
+        const lines=STEPS[i].label.split('\n');
+        const txt=mkSvg('text'); txt.setAttribute('class','step-label');
+        txt.setAttribute('x',pos[i].x); txt.setAttribute('y',pos[i].y-(lines.length-1)*7);
+        lines.forEach((l,li)=>{const ts=mkSvg('tspan'); ts.setAttribute('x',pos[i].x); ts.setAttribute('dy',li?'14':'0'); ts.textContent=l; txt.appendChild(ts);});
+        g.appendChild(txt); svg.appendChild(g);
+    }
+    // center text
+    const ct=mkSvg('text');ct.setAttribute('class','center-title');ct.setAttribute('x',cx);ct.setAttribute('y',cy-8);ct.textContent='ITR_QUAL_REF_TECH';svg.appendChild(ct);
+    const cd=mkSvg('text');cd.setAttribute('class','center-date');cd.setAttribute('x',cx);cd.setAttribute('y',cy+16);cd.textContent='16/02/2026';svg.appendChild(cd);
+}
+
+// =============================================
+// STATUS FILTER PANEL
+// =============================================
+function buildStatusPanel(panelId, drillId, counts, drillData){
+    const panel=document.getElementById(panelId);
+    let html='';
+    STATUS_ORDER.forEach(c=>{
+        html+=`<div class="status-filter-item" onclick="toggleStatusDrill('${panelId}','${drillId}','${c}')" data-color="${c}">
+            <span class="sf-dot" style="background:${COL[c].f}"></span>
+            <span class="sf-label">${COL[c].l}</span>
+            <span class="sf-count">${counts[c]||0}</span>
+        </div>`;
+    });
+    panel.innerHTML=html;
+    panel._drillData=drillData;
+}
+
+function toggleStatusDrill(panelId, drillId, color){
+    const panel=document.getElementById(panelId);
+    const drill=document.getElementById(drillId);
+    const items=panel.querySelectorAll('.status-filter-item');
+    const wasOpen = drill.classList.contains('open') && drill.dataset.color===color;
+    items.forEach(i=>i.classList.remove('active'));
+    if(wasOpen){ drill.classList.remove('open'); return; }
+    drill.dataset.color=color;
+    const item=[...items].find(i=>i.dataset.color===color);
+    if(item) item.classList.add('active');
+    const data=panel._drillData[color]||[];
+    let html='';
+    data.forEach(cat=>{
+        html+=`<div class="sd-category">`;
+        html+=`<div class="sd-cat-header" onclick="showView('category')">
+            <span class="sf-dot" style="background:${COL[color].f};width:7px;height:7px"></span>
+            ${cat.cat} <span class="sd-cat-count">(${cat.indicators.length})</span>
+        </div>`;
+        cat.indicators.forEach(ind=>{
+            html+=`<div class="sd-indicator" onclick="showView('indicator')">
+                <div class="sd-ind-code">${ind.code}</div>`;
+            ind.steps.forEach(st=>{
+                html+=`<div class="sd-ind-step">${st.s}</div>`;
+                if(st.c) html+=`<div class="sd-ind-comment">${st.c}</div>`;
+            });
+            html+=`</div>`;
+        });
+        html+=`</div>`;
+    });
+    drill.innerHTML=html;
+    drill.classList.add('open');
+}
+
+// =============================================
+// SIDEBAR (with tooltips)
+// =============================================
+let currentView='global';
+function buildSidebar(){
+    const sb=document.getElementById('sidebar');
+    let h='';
+    if(currentView==='global'){
+        h+='<div class="sidebar-section"><h4>Categories</h4>';
+        CATEGORIES.forEach(c=>{
+            h+=`<div class="sidebar-item" onclick="showView('category')" title="${c.name} - ${c.count} indicateurs"><span class="sidebar-dot" style="background:${COL[c.worst].f}"></span><span>${c.name}</span><span class="sidebar-count">${c.count}</span></div>`;
+        });
+        h+='</div>';
+    } else if(currentView==='category'){
+        h+='<div class="sidebar-section"><h4>Categories</h4>';
+        CATEGORIES.forEach(c=>{
+            const cls=c.name==='Process Incident'?' active':'';
+            h+=`<div class="sidebar-item${cls}" onclick="showView('category')" title="${c.name} - ${c.count} indicateurs"><span class="sidebar-dot" style="background:${COL[c.worst].f}"></span><span>${c.name}</span></div>`;
+        });
+        h+='</div><div class="sidebar-divider"></div><div class="sidebar-section"><h4>Indicateurs</h4>';
+        CAT_INDICATORS.forEach(ind=>{
+            h+=`<div class="sidebar-item" onclick="showView('indicator')" title="${ind.code} : ${ind.desc}"><span class="sidebar-dot" style="background:${COL[ind.color].f}"></span><span>${ind.code}</span></div>`;
+        });
+        h+='</div>';
+    } else if(currentView==='indicator' || currentView==='kanban'){
+        h+='<div class="sidebar-section"><h4>Indicateurs</h4>';
+        CAT_INDICATORS.forEach(ind=>{
+            const cls=ind.code==='ITR_QUAL_REF_TECH'?' active':'';  // highlight current if match
+            h+=`<div class="sidebar-item${cls}" onclick="showView('indicator')" title="${ind.code} : ${ind.desc}"><span class="sidebar-dot" style="background:${COL[ind.color].f}"></span><span>${ind.code}</span></div>`;
+        });
+        h+='</div>';
+    }
+    sb.innerHTML=h;
+}
+
+// =============================================
+// DRILL-DOWN TABLES (with edit link)
+// =============================================
+let lastGlobalDrillStep = -1;
+let lastCategoryDrillStep = -1;
+
+function showGlobalDrill(i){
+    lastGlobalDrillStep = i;
+    document.getElementById('global-drill-title').innerHTML=
+        `Etape : ${STEPS[i].short} <span class="drill-edit-link" onclick="openModal(${i},'global')">Modifier statut global</span>`;
+    const b=document.getElementById('global-drill-body'); b.innerHTML='';
+    CATEGORIES.forEach(c=>{
+        const tr=document.createElement('tr'); tr.onclick=()=>showView('category');
+        tr.innerHTML=`<td>${c.name}</td><td><span class="status-dot" style="background:${COL[c.worst].f}"></span>${COL[c.worst].l}</td><td>${c.count}</td>`;
+        b.appendChild(tr);
+    });
+    const d=document.getElementById('global-drill-area'); d.style.display='block';
+    d.scrollIntoView({behavior:'smooth'});
+}
+
+function showCategoryDrill(i){
+    lastCategoryDrillStep = i;
+    document.getElementById('category-drill-title').innerHTML=
+        `Etape : ${STEPS[i].short} <span class="drill-edit-link" onclick="openModal(${i},'categorie')">Modifier statut categorie</span>`;
+    const b=document.getElementById('category-drill-body'); b.innerHTML='';
+    CAT_INDICATORS.forEach(ind=>{
+        const tr=document.createElement('tr'); tr.onclick=()=>showView('indicator');
+        tr.innerHTML=`<td>${ind.code}</td><td>${ind.desc}</td><td><span class="status-dot" style="background:${COL[ind.color].f}"></span>${COL[ind.color].l}</td>`;
+        b.appendChild(tr);
+    });
+    const d=document.getElementById('category-drill-area'); d.style.display='block';
+    d.scrollIntoView({behavior:'smooth'});
+}
+
+// =============================================
+// MODAL (3-layer tabs)
+// =============================================
+let editIdx = -1;
+let currentLayer = 'indicateur';
+
+function openModal(stepIdx, defaultLayer){
+    editIdx = stepIdx;
+    currentLayer = defaultLayer || 'indicateur';
+    document.getElementById('modal-title').textContent = `Etape : ${STEPS[stepIdx].short}`;
+    switchModalTab(currentLayer);
+    document.getElementById('modal-overlay').classList.add('active');
+}
+
+function switchModalTab(layer){
+    currentLayer = layer;
+    // update tab active state
+    document.querySelectorAll('.modal-tab').forEach(t=>{
+        t.classList.toggle('active', t.dataset.layer===layer);
+    });
+    // update note
+    document.getElementById('modal-note').textContent = LAYERS[layer].note;
+    // update color picker
+    const data = indicatorData[editIdx][layer];
+    const selColorVal = data.color || 'none';
+    document.querySelectorAll('.color-btn').forEach(b=>{
+        b.classList.toggle('selected', b.dataset.color===selColorVal);
+    });
+    // update comment
+    document.getElementById('modal-comment').value = data.comment.replace(/\\n/g,'\n');
+}
+
+function closeModal(){
+    document.getElementById('modal-overlay').classList.remove('active');
+}
+
+function selColor(btn){
+    document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('selected'));
+    btn.classList.add('selected');
+}
+
+function clearCurrentLayer(){
+    indicatorData[editIdx][currentLayer].color = null;
+    indicatorData[editIdx][currentLayer].comment = '';
+    switchModalTab(currentLayer); // refresh display
+}
+
+function saveModal(){
+    if(editIdx>=0){
+        const sel = document.querySelector('.color-btn.selected');
+        const c = sel ? sel.dataset.color : 'none';
+        indicatorData[editIdx][currentLayer].color = (c==='none') ? null : c;
+        indicatorData[editIdx][currentLayer].comment = document.getElementById('modal-comment').value;
+        drawIndWheel();
+        buildStatusPanel('sp-indicator','sd-indicator',countIndStatuses(),buildIndDrill());
+    }
+    closeModal();
+}
+
+// =============================================
+// VIEWS
+// =============================================
+function showView(name){
+    currentView=name;
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+name).classList.add('active');
+    const bc=document.getElementById('breadcrumb');
+    const a=(t,v)=>`<a onclick="showView('${v}')">${t}</a><span class="sep"> &rsaquo; </span>`;
+    if(name==='global') bc.innerHTML='<span class="current">Vue Globale</span>';
+    else if(name==='category') bc.innerHTML=a('Global','global')+'<span class="current">Process Incident</span>';
+    else if(name==='indicator') bc.innerHTML=a('Global','global')+a('Process Incident','category')+'<span class="current">ITR_QUAL_REF_TECH</span>';
+    else if(name==='kanban') bc.innerHTML=a('Global','global')+a('Process Incident','category')+a('ITR_QUAL_REF_TECH','indicator')+'<span class="current">Actions</span>';
+    document.getElementById('global-drill-area').style.display='none';
+    document.getElementById('category-drill-area').style.display='none';
+    document.querySelectorAll('.status-drill').forEach(d=>d.classList.remove('open'));
+    document.querySelectorAll('.status-filter-item').forEach(i=>i.classList.remove('active'));
+    buildSidebar();
+    if(name==='indicator') drawIndWheel();
+}
+
+// =============================================
+// INDICATOR STATUS COUNTS (3-layer aware)
+// =============================================
+function countIndStatuses(){
+    const c={grey:0,green:0,yellow:0,orange:0,red:0};
+    indicatorData.forEach(d=>{ c[getWorstColor(d)]++; });
+    return c;
+}
+
+function buildIndDrill(){
+    const res={};
+    STATUS_ORDER.forEach(c=>{
+        const steps=[];
+        indicatorData.forEach((d,i)=>{
+            if(getWorstColor(d)===c){
+                // collect all non-empty comments from layers
+                const comments = [];
+                ['global','categorie','indicateur'].forEach(layer=>{
+                    if(d[layer].comment){
+                        comments.push('['+LAYERS[layer].badge+'] '+d[layer].comment.split('\n')[0]);
+                    }
+                });
+                steps.push({s:STEPS[i].short, c:comments.join(' | ')||''});
+            }
+        });
+        if(steps.length) res[c]=[{cat:'Etapes',indicators:[{code:'ITR_QUAL_REF_TECH',steps}]}];
+    });
+    return res;
+}
+
+// =============================================
+// INIT
+// =============================================
+drawWheel('wheel-global',globalData,{c1:'VUE GLOBALE',c2:'49 indicateurs',onClick:showGlobalDrill});
+drawWheel('wheel-category',categoryData,{c1:'Process Incident',c2:'10 indicateurs',onClick:showCategoryDrill});
+drawIndWheel();
+buildSidebar();
+
+buildStatusPanel('sp-global','sd-global',{green:12,yellow:18,orange:9,red:3,grey:7},GLOBAL_STATUS_DETAIL);
+buildStatusPanel('sp-category','sd-category',{green:5,yellow:2,orange:1,red:1,grey:1},{
+    red:[{cat:'Process Incident',indicators:[{code:'IQ_INC_NON_RES',steps:[{s:'COLLECTE',c:'Aucune source identifiee'}]}]}],
+    orange:[{cat:'Process Incident',indicators:[{code:'IQ_INC_ESCAL',steps:[{s:'COLLECTE',c:'Consolidation des donnees requise'}]}]}],
+    yellow:[{cat:'Process Incident',indicators:[{code:'IQ_INC_2A',steps:[{s:'DATA PREP',c:'Mapping en cours'}]},{code:'IQ_INC_REOPEN',steps:[{s:'DATA QUALITY',c:'Verification des regles'}]}]}],
+    green:[{cat:'Process Incident',indicators:[{code:'IQ_INC_1',steps:[{s:'Toutes etapes',c:''}]},{code:'IQ_INC_1A',steps:[{s:'Toutes etapes',c:''}]},{code:'IQ_INC_1B',steps:[{s:'Toutes etapes',c:''}]},{code:'IQ_INC_2',steps:[{s:'Toutes etapes',c:''}]},{code:'IQ_INC_2B',steps:[{s:'Toutes etapes',c:''}]}]}],
+    grey:[{cat:'Process Incident',indicators:[{code:'IQ_INC_PROP',steps:[{s:'Non demarre',c:''}]}]}]
+});
+buildStatusPanel('sp-indicator','sd-indicator',countIndStatuses(),buildIndDrill());
+
+</script>
+</body>
+</html>

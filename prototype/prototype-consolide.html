@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roue CSI - Prototype Consolide</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI',Tahoma,sans-serif;background:#1a1a2e;color:#e0e0e0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+        /* TOPBAR */
+        .topbar{background:#16213e;padding:0 24px;display:flex;align-items:stretch;border-bottom:2px solid #0f3460;flex-shrink:0}
+        .topbar h1{font-size:18px;color:#e94560;display:flex;align-items:center;margin-right:24px}
+        .main-tabs{display:flex}
+        .main-tab{padding:13px 20px;cursor:pointer;font-size:13px;font-weight:600;color:#555;border-bottom:3px solid transparent;transition:all .2s;display:flex;align-items:center;gap:7px}
+        .main-tab:hover{color:#aaa}
+        .main-tab.active{color:#fff;border-bottom-color:#e94560}
+        .topbar-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+        .breadcrumb{display:flex;gap:6px;align-items:center;font-size:13px}
+        .breadcrumb a{color:#a0c4ff;text-decoration:none;cursor:pointer}
+        .breadcrumb a:hover{text-decoration:underline}
+        .breadcrumb .sep{color:#555}
+        .breadcrumb .current{color:#fff;font-weight:600}
+        .inline-counters{display:flex;gap:5px;align-items:center}
+        .ic{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.05)}
+        .ic .icd{width:7px;height:7px;border-radius:50%}
+
+        /* LAYOUT */
+        .main-layout{display:flex;flex:1;overflow:hidden}
+
+        /* SIDEBAR */
+        .sidebar{width:220px;min-width:220px;background:#16213e;border-right:1px solid #0f3460;overflow-y:auto;flex-shrink:0}
+        .sidebar-section{padding:12px}
+        .sidebar-section h4{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#555;margin-bottom:6px}
+        .sidebar-item{display:flex;align-items:center;gap:7px;padding:5px 9px;border-radius:5px;cursor:pointer;font-size:11px;transition:background .15s;margin-bottom:1px}
+        .sidebar-item:hover{background:#1a2744}
+        .sidebar-item.active{background:#0f3460;color:#fff}
+        .sidebar-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+        .sidebar-count{margin-left:auto;font-size:10px;color:#444}
+        .sidebar-divider{height:1px;background:#0f3460;margin:4px 12px}
+
+        /* FICHE PANEL */
+        .fiche-panel{width:0;min-width:0;overflow:hidden;background:#16213e;border-right:1px solid #0f3460;transition:all .3s ease;flex-shrink:0}
+        .fiche-panel.visible{width:235px;min-width:235px;overflow-y:auto}
+        .fiche-inner{width:235px;padding:16px}
+        .fiche-title{font-size:14px;font-weight:700;color:#fff;margin-bottom:2px;word-break:break-word}
+        .fiche-desc{font-size:11px;color:#999;margin-bottom:12px;line-height:1.4}
+        .fiche-badges{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+        .fiche-badge{padding:2px 10px;border-radius:8px;font-size:10px;font-weight:600}
+        .fb-sla{background:#0f3460;color:#a0c4ff} .fb-kpi{background:#1a3020;color:#66bb6a} .fb-xla{background:#302010;color:#ffb74d}
+        .fb-etat{background:#302a10;color:#eab308}
+        .fiche-field{margin-bottom:12px}
+        .fiche-field label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#555;display:block;margin-bottom:3px}
+        .fiche-field .val{font-size:12px;color:#ccc;line-height:1.4}
+        .fiche-field .val-box{font-size:11px;color:#ccc;line-height:1.5;background:#0f1a30;padding:8px 10px;border-radius:5px;border-left:3px solid #3a7bd5}
+        .fiche-edit{font-size:10px;color:#a0c4ff;cursor:pointer;margin-top:3px;display:inline-block}
+        .fiche-edit:hover{text-decoration:underline}
+        .fiche-actions-link{display:flex;align-items:center;gap:6px;padding:8px 12px;margin-top:10px;background:#0f1a30;border-radius:6px;cursor:pointer;font-size:12px;color:#a0c4ff;font-weight:600;transition:background .15s}
+        .fiche-actions-link:hover{background:#1a2744}
+
+        /* CONTENT */
+        .content{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+        .section{display:none;flex:1;flex-direction:column}
+        .section.active{display:flex}
+        .view-header{display:flex;align-items:center;gap:16px;padding:12px 20px 8px;flex-shrink:0;flex-wrap:wrap}
+        .view-header h2{font-size:17px;color:#fff}
+        .view-header .subtitle{font-size:11px;color:#666}
+
+        /* READONLY BANNER */
+        .ro-banner{display:none;padding:8px 20px;background:#302a10;color:#eab308;font-size:12px;font-weight:600;text-align:center;border-bottom:1px solid #eab30840;flex-shrink:0}
+        .ro-banner.visible{display:block}
+
+        /* WHEEL AREA */
+        .wheel-area{display:flex;align-items:flex-start;justify-content:center;padding:10px 16px;gap:14px;flex-shrink:0;flex-wrap:nowrap}
+        .step-ellipse{cursor:pointer;transition:filter .2s}
+        .step-ellipse:hover{filter:brightness(1.2) drop-shadow(0 0 8px rgba(255,255,255,.3))}
+        .step-label{pointer-events:none;font-weight:600;font-size:12px;fill:#fff;text-anchor:middle;dominant-baseline:central}
+        .arrow-path{fill:none;stroke:#3a7bd5;stroke-width:2.5}
+        .center-title{font-size:11px;fill:#777;text-anchor:middle}
+        .center-date{font-size:16px;fill:#fff;text-anchor:middle;font-weight:700}
+        .comment-line{stroke:#444;stroke-width:1;stroke-dasharray:4,3}
+        .comment-box-bg{fill:#16213e;stroke:#2a2a4a;stroke-width:1}
+        .comment-text{fill:#bbb;font-size:10px}
+        .comment-step-label{fill:#a0c4ff;font-size:10px;font-weight:600}
+        .comment-badge-text{fill:#fff;font-size:8px;font-weight:700;text-anchor:middle;dominant-baseline:central}
+        .hint{text-align:center;color:#444;font-size:11px;padding:6px;flex-shrink:0}
+
+        /* RIGHT PANELS */
+        .right-panels{display:flex;flex-direction:column;gap:8px;flex-shrink:0;min-width:170px}
+        .status-panel{}
+        .status-filter-item{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:5px;cursor:pointer;font-size:11px;margin-bottom:1px;border-left:3px solid transparent;transition:all .15s}
+        .status-filter-item:hover{background:#1a2744}
+        .status-filter-item.active{background:#0f1a30;border-left-color:#a0c4ff}
+        .sf-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+        .sf-label{flex:1}
+        .sf-count{font-size:10px;color:#666;background:#0f1a30;padding:1px 6px;border-radius:8px}
+        .status-drill{max-height:300px;overflow-y:auto;background:#0f1a30;border-radius:6px;padding:8px;font-size:11px;display:none;margin-top:4px}
+        .status-drill.open{display:block}
+        .sd-cat-header{display:flex;align-items:center;gap:5px;padding:3px 5px;border-radius:3px;cursor:pointer;font-weight:600;color:#a0c4ff;font-size:11px;margin-bottom:2px}
+        .sd-cat-header:hover{background:#16213e}
+        .sd-indicator{padding:3px 5px 3px 16px;cursor:pointer;border-radius:3px;color:#ccc;margin-bottom:2px}
+        .sd-indicator:hover{background:#16213e}
+        .sd-ind-code{font-weight:600;color:#e0e0e0;font-size:11px}
+        .sd-ind-step{color:#888;font-size:10px}
+        .sd-ind-comment{color:#666;font-size:10px;font-style:italic}
+
+        /* HISTORY */
+        .history-panel h4{font-size:10px;color:#555;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px}
+        .history-date{padding:4px 8px;font-size:11px;cursor:pointer;border-radius:4px;margin-bottom:1px;transition:background .15s}
+        .history-date:hover{background:#1a2744}
+        .history-date.active{background:#0f3460;color:#fff}
+
+        /* DRILL TABLE */
+        .drill-area{padding:0 20px 16px;overflow-y:auto;display:none}
+        .drill-table{width:100%;max-width:800px;margin:0 auto;border-collapse:collapse}
+        .drill-table th{background:#0f3460;padding:7px 12px;text-align:left;font-size:11px;color:#a0c4ff}
+        .drill-table td{padding:6px 12px;border-bottom:1px solid #1a1a2e;font-size:12px;cursor:pointer;transition:background .15s}
+        .drill-table tr:hover td{background:#1a2744}
+        .status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle}
+        .drill-edit{font-size:11px;color:#e94560;cursor:pointer;margin-left:12px}
+        .drill-edit:hover{text-decoration:underline}
+
+        /* MODAL */
+        .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;justify-content:center;align-items:center}
+        .modal-overlay.active{display:flex}
+        .modal{background:#16213e;border-radius:12px;padding:22px;width:480px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+        .modal h3{margin-bottom:14px;color:#e94560;font-size:16px}
+        .modal label{font-size:12px;color:#999;display:block;margin-bottom:5px}
+        .modal textarea{width:100%;height:80px;background:#0f1a30;border:1px solid #333;border-radius:6px;color:#e0e0e0;padding:8px;font-family:inherit;font-size:12px;resize:vertical;margin-bottom:12px}
+        .color-picker{display:flex;gap:8px;margin-bottom:16px}
+        .color-btn{width:34px;height:34px;border-radius:8px;border:3px solid transparent;cursor:pointer;transition:all .15s}
+        .color-btn:hover{transform:scale(1.1)}
+        .color-btn.selected{border-color:#fff;box-shadow:0 0 10px rgba(255,255,255,.3)}
+        .modal-actions{display:flex;gap:8px;justify-content:flex-end}
+        .btn{padding:7px 18px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600}
+        .btn-primary{background:#e94560;color:#fff}
+        .btn-secondary{background:#333;color:#ccc}
+        .btn:hover{filter:brightness(1.15)}
+        .modal-tabs{display:flex;gap:4px;margin-bottom:14px}
+        .modal-tab{padding:7px 14px;border-radius:6px 6px 0 0;cursor:pointer;font-size:12px;font-weight:600;background:#0f1a30;color:#555;border-bottom:2px solid transparent;transition:all .15s;display:flex;align-items:center;gap:6px}
+        .modal-tab:hover{color:#aaa}
+        .modal-tab.active{background:#1a2744;color:#fff;border-bottom-color:#e94560}
+        .tab-badge{display:inline-block;width:18px;height:16px;border-radius:3px;text-align:center;line-height:16px;font-size:10px;color:#fff;font-weight:700}
+        .modal-note{font-size:11px;color:#666;font-style:italic;margin-bottom:10px;padding:6px 10px;background:#0f1a30;border-radius:4px;border-left:3px solid #333}
+        .btn-clear{background:none;border:1px dashed #444;color:#777;padding:5px 14px;border-radius:5px;cursor:pointer;font-size:11px;margin-bottom:14px;display:block}
+        .btn-clear:hover{border-color:#e94560;color:#e94560}
+
+        /* KANBAN */
+        .kanban-area{padding:16px 20px;overflow-y:auto;flex:1}
+        .kanban-board{display:flex;gap:12px;overflow-x:auto}
+        .kanban-column{min-width:195px;flex:1;background:#16213e;border-radius:10px;padding:12px}
+        .kanban-column h4{font-size:11px;color:#777;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;padding-bottom:7px;border-bottom:2px solid #222}
+        .kanban-column h4 .kcount{background:#333;border-radius:8px;padding:1px 7px;font-size:10px;margin-left:4px}
+        .kanban-card{background:#0f1a30;border-radius:7px;padding:10px;margin-bottom:7px;border-left:3px solid #3a7bd5;cursor:grab;transition:transform .15s}
+        .kanban-card:hover{transform:translateY(-2px)}
+        .kanban-card.cat-card{border-left-color:#e94560;border-left-style:dashed;border-left-width:3px}
+        .kanban-card .card-title{font-size:12px;font-weight:600;margin-bottom:4px}
+        .kanban-card .card-meta{font-size:10px;color:#555}
+        .kanban-card .card-step{display:inline-block;font-size:9px;background:#1a3050;padding:1px 7px;border-radius:3px;margin-top:4px;color:#a0c4ff}
+        .kanban-card .cat-badge{display:inline-block;font-size:9px;background:#e9456030;color:#e94560;padding:1px 7px;border-radius:3px;margin-top:4px;margin-left:4px;font-weight:700}
+
+        /* REFERENTIEL */
+        .ref-header{padding:18px 24px 10px;flex-shrink:0}
+        .ref-header h2{font-size:19px;color:#fff;margin-bottom:3px}
+        .ref-header .subtitle{font-size:12px;color:#666}
+        .ref-toolbar{display:flex;gap:10px;align-items:center;padding:0 24px 12px;flex-wrap:wrap;flex-shrink:0}
+        .search-input{background:#0f1a30;border:1px solid #333;border-radius:6px;padding:7px 12px;color:#e0e0e0;font-size:12px;width:260px}
+        .search-input::placeholder{color:#555}
+        .filter-select{background:#0f1a30;border:1px solid #333;border-radius:6px;padding:6px 10px;color:#e0e0e0;font-size:11px}
+        .ref-stats{display:flex;gap:10px;padding:0 24px 10px;flex-shrink:0;font-size:11px;color:#888}
+        .ref-stat{display:flex;align-items:center;gap:4px}
+        .ref-stat .n{font-weight:700;color:#ccc}
+        .table-area{padding:0 24px 20px;overflow-y:auto;flex:1}
+        .ref-table{width:100%;border-collapse:collapse;font-size:12px}
+        .ref-table th{background:#0f3460;padding:8px 10px;text-align:left;color:#a0c4ff;font-size:10px;text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0;z-index:2;white-space:nowrap}
+        .ref-table td{padding:7px 10px;border-bottom:1px solid #1a1a2e}
+        .ref-table tr{cursor:pointer;transition:background .15s}
+        .ref-table tr:hover td{background:#1a2744}
+        .type-badge{display:inline-block;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:600}
+        .type-sla{background:#0f3460;color:#a0c4ff} .type-kpi{background:#1a3020;color:#66bb6a} .type-xla{background:#302010;color:#ffb74d}
+        .etat-badge{display:inline-block;padding:1px 7px;border-radius:8px;font-size:10px}
+        .etat-realise{background:#1a3020;color:#66bb6a} .etat-encours{background:#302a10;color:#eab308} .etat-acadrer{background:#201520;color:#ce93d8}
+        .roue-link{color:#a0c4ff;font-size:11px;cursor:pointer;white-space:nowrap}
+        .roue-link:hover{text-decoration:underline}
+
+        /* COLORS */
+        .c-none{background:#333} .c-grey{background:#6b7280} .c-green{background:#22c55e}
+        .c-yellow{background:#eab308} .c-orange{background:#f97316} .c-red{background:#dc2626}
+    </style>
+</head>
+<body>
+
+<!-- ============ TOPBAR ============ -->
+<div class="topbar">
+    <h1>ROUE CSI</h1>
+    <div class="main-tabs">
+        <div class="main-tab active" onclick="switchSection('roue')" id="tab-roue">Roue CSI</div>
+        <div class="main-tab" onclick="switchSection('ref')" id="tab-ref">Referentiel</div>
+    </div>
+    <div class="topbar-right">
+        <div class="inline-counters" id="counters"></div>
+        <div class="breadcrumb" id="breadcrumb"><span class="current">Vue Globale</span></div>
+    </div>
+</div>
+
+<!-- ============ MAIN LAYOUT ============ -->
+<div class="main-layout">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="fiche-panel" id="fiche-panel"><div class="fiche-inner" id="fiche-inner"></div></div>
+    <div class="content">
+
+        <!-- ====== SECTION ROUE ====== -->
+        <div class="section active" id="section-roue">
+
+            <!-- VUE GLOBALE -->
+            <div id="view-global">
+                <div class="view-header"><div><h2>Vue Globale</h2><div class="subtitle">49 indicateurs</div></div></div>
+                <div class="wheel-area">
+                    <svg id="wh-global" width="440" height="440" viewBox="0 0 440 440"></svg>
+                    <div class="right-panels">
+                        <div class="status-panel" id="sp-global"></div>
+                        <div class="status-drill" id="sd-global"></div>
+                    </div>
+                </div>
+                <div class="hint">Cliquez sur une etape pour voir la repartition par categorie</div>
+                <div class="drill-area" id="drill-global">
+                    <h3 style="text-align:center;margin-bottom:10px;color:#a0c4ff;font-size:13px" id="drill-global-title"></h3>
+                    <table class="drill-table"><thead><tr><th>Categorie</th><th>Statut</th><th>Indicateurs</th></tr></thead><tbody id="drill-global-body"></tbody></table>
+                </div>
+            </div>
+
+            <!-- VUE CATEGORIE -->
+            <div id="view-category" style="display:none">
+                <div class="view-header"><div><h2 id="cat-title">Process Incident</h2><div class="subtitle" id="cat-subtitle">10 indicateurs</div></div></div>
+                <div class="wheel-area">
+                    <svg id="wh-cat" width="440" height="440" viewBox="0 0 440 440"></svg>
+                    <div class="right-panels">
+                        <div class="status-panel" id="sp-cat"></div>
+                        <div class="status-drill" id="sd-cat"></div>
+                    </div>
+                </div>
+                <div class="hint">Cliquez sur une etape pour voir la repartition par indicateur</div>
+                <div class="drill-area" id="drill-cat">
+                    <h3 style="text-align:center;margin-bottom:10px;color:#a0c4ff;font-size:13px" id="drill-cat-title"></h3>
+                    <table class="drill-table"><thead><tr><th>Indicateur</th><th>Description</th><th>Statut</th></tr></thead><tbody id="drill-cat-body"></tbody></table>
+                </div>
+            </div>
+
+            <!-- VUE INDICATEUR -->
+            <div id="view-indicator" style="display:none">
+                <div class="ro-banner" id="ro-banner">Consultation historique - Lecture seule</div>
+                <div class="view-header"><div><h2 id="ind-title">ITR_QUAL_REF_TECH</h2><div class="subtitle" id="ind-subtitle">Qualite de la gestion des referentiels techniques</div></div></div>
+                <div class="wheel-area">
+                    <svg id="wh-ind" width="800" height="490" viewBox="0 0 800 490"></svg>
+                    <div class="right-panels">
+                        <div class="status-panel" id="sp-ind"></div>
+                        <div class="status-drill" id="sd-ind"></div>
+                        <div class="history-panel">
+                            <h4>Historique</h4>
+                            <div class="history-date active" onclick="selectDate('16/02/2026',true)">16/02/2026</div>
+                            <div class="history-date" onclick="selectDate('15/01/2026',false)">15/01/2026</div>
+                            <div class="history-date" onclick="selectDate('12/12/2025',false)">12/12/2025</div>
+                            <div class="history-date" onclick="selectDate('20/11/2025',false)">20/11/2025</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VUE KANBAN -->
+            <div id="view-kanban" style="display:none">
+                <div class="view-header"><div><h2 id="kanban-title">Actions</h2><div class="subtitle" id="kanban-subtitle"></div></div></div>
+                <div class="kanban-area"><div class="kanban-board" id="kanban-board"></div></div>
+            </div>
+        </div>
+
+        <!-- ====== SECTION REFERENTIEL ====== -->
+        <div class="section" id="section-ref">
+            <div class="ref-header"><h2>Referentiel des indicateurs</h2><div class="subtitle">Design et parametrage des indicateurs</div></div>
+            <div class="ref-toolbar">
+                <input type="text" class="search-input" placeholder="Rechercher par code, description..." oninput="filterRef()" id="ref-search">
+                <select class="filter-select" onchange="filterRef()" id="ref-cat-filter"><option value="all">Toutes categories</option></select>
+                <select class="filter-select" onchange="filterRef()" id="ref-type-filter"><option value="all">Tous types</option><option>SLA</option><option>KPI</option><option>XLA</option></select>
+                <select class="filter-select" onchange="filterRef()" id="ref-etat-filter"><option value="all">Tous etats</option><option>Realise</option><option>En cours</option><option>A cadrer</option></select>
+            </div>
+            <div class="ref-stats" id="ref-stats"></div>
+            <div class="table-area">
+                <table class="ref-table"><thead><tr><th>CSI</th><th>Chap.</th><th>Code</th><th>Description</th><th>Categorie</th><th>Type</th><th>Etat</th><th>Ciblage</th><th>Conformite</th><th></th></tr></thead><tbody id="ref-body"></tbody></table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ============ MODAL ============ -->
+<div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+        <h3 id="modal-title"></h3>
+        <div class="modal-tabs" id="modal-tabs"></div>
+        <div class="modal-note" id="modal-note"></div>
+        <label>Statut</label>
+        <div class="color-picker">
+            <div class="color-btn c-none" onclick="selColor(this)" data-color="none" title="Aucun (vider)"></div>
+            <div class="color-btn c-grey" onclick="selColor(this)" data-color="grey" title="Non evalue"></div>
+            <div class="color-btn c-green" onclick="selColor(this)" data-color="green" title="Valide"></div>
+            <div class="color-btn c-yellow" onclick="selColor(this)" data-color="yellow" title="En cours"></div>
+            <div class="color-btn c-orange" onclick="selColor(this)" data-color="orange" title="Warning"></div>
+            <div class="color-btn c-red" onclick="selColor(this)" data-color="red" title="Blocage"></div>
+        </div>
+        <label>Commentaire</label>
+        <textarea id="modal-comment"></textarea>
+        <button class="btn-clear" id="btn-clear" onclick="clearLayer()">Vider cette couche</button>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal()">Annuler</button>
+            <button class="btn btn-primary" onclick="saveModal()">Enregistrer</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ===================================================================
+// DATA
+// ===================================================================
+const COL = {grey:'#6b7280',green:'#22c55e',yellow:'#eab308',orange:'#f97316',red:'#dc2626'};
+const COL_L = {grey:'Non eval.',green:'Valide',yellow:'En cours',orange:'Warning',red:'Blocage'};
+const STATUS_ORDER = ['green','yellow','orange','red','grey'];
+
+const STEPS = [
+    {label:"Ce qu'on\nVEUT",short:"Ce qu'on VEUT",tip:"Definir l'objectif de mesure :\nquel resultat attend-on de cet indicateur ?"},
+    {label:"Ce qu'on\nPEUT",short:"Ce qu'on PEUT",tip:"Identifier ce qui est techniquement\nmesurable avec les outils disponibles"},
+    {label:"COLLECTE",short:"COLLECTE",tip:"Collecter les donnees brutes\nnecessaires au calcul de l'indicateur"},
+    {label:"DATA\nPREP",short:"DATA PREP",tip:"Preparer et transformer les donnees\npour les rendre exploitables"},
+    {label:"DATA\nQUALITY",short:"DATA QUALITY",tip:"Verifier la qualite, la coherence\net la fiabilite des donnees"},
+    {label:"DATA VIZ\n& USAGE",short:"DATA VIZ & USAGE",tip:"Visualiser et exploiter les resultats\npour le pilotage operationnel"},
+    {label:"BILAN",short:"BILAN",tip:"Bilan de l'etape : revue des acquis\net identification des axes d'amelioration"}
+];
+
+const LAYERS = {
+    global:     {b:'G', c:'#e94560', label:'Global',     note:'Ce statut/commentaire sera propage a TOUS les indicateurs pour cette etape'},
+    categorie:  {b:'C', c:'#3a7bd5', label:'Categorie',  note:'Ce statut/commentaire sera propage aux indicateurs de cette categorie pour cette etape'},
+    indicateur: {b:'I', c:'#8b5cf6', label:'Indicateur', note:'Statut/commentaire specifique a cet indicateur uniquement'}
+};
+
+const CATEGORIES = [
+    {name:'SLA Transverse',count:12,worst:'orange'},{name:'Service Desk',count:8,worst:'orange'},
+    {name:'Process Incident',count:10,worst:'red'},{name:'Process Demande',count:7,worst:'yellow'},
+    {name:'Gestion des stocks',count:3,worst:'green'},{name:'Marche de location',count:2,worst:'grey'},
+    {name:'Pilotage',count:7,worst:'yellow'}
+];
+
+const INDICATORS = [
+    {code:'IQ_INC_1',chap:'4.2.1',desc:"Resolution incident 'Bloque'",cat:'Process Incident',type:'SLA',etat:'Realise',ciblage:'Tous les incidents de priorite Bloquant',conformite:'Delai de resolution <= 4h ouvrees',worst:'green'},
+    {code:'IQ_INC_1A',chap:'4.2.1.1',desc:"Resolution 'Bloque' (4h)",cat:'Process Incident',type:'SLA',etat:'Realise',ciblage:'Incidents P1 hors maintenance programmee',conformite:'95% resolus en moins de 4h',worst:'green'},
+    {code:'IQ_INC_2',chap:'4.2.2',desc:"Resolution incident 'Gene'",cat:'Process Incident',type:'SLA',etat:'Realise',ciblage:'Tous les incidents de priorite Gene',conformite:'Delai de resolution <= 12h ouvrees',worst:'green'},
+    {code:'IQ_INC_NON_RES',chap:'4.2.5',desc:'Non-resolution des tickets',cat:'Process Incident',type:'KPI',etat:'En cours',ciblage:'Tickets ouverts depuis plus de 30 jours',conformite:'Taux de non-resolution < 5%',worst:'red'},
+    {code:'IQ_INC_ESCAL',chap:'4.2.6',desc:"Delais et qualite de l'escalade",cat:'Process Incident',type:'SLA',etat:'En cours',ciblage:'Escalades techniques et hierarchiques',conformite:'100% des escalades notifiees sous 1h',worst:'orange'},
+    {code:'IQ_INC_PROP',chap:'4.2.7',desc:'Propositions amelioration',cat:'Process Incident',type:'KPI',etat:'A cadrer',ciblage:'Propositions emises par les equipes',conformite:'Au moins 2 propositions par trimestre',worst:'grey'},
+    {code:'ITR_QUAL_REF_TECH',chap:'4.1.3',desc:'Qualite gestion referentiels techniques',cat:'SLA Transverse',type:'SLA',etat:'En cours',ciblage:'Liste des donnees des referentiels techniques',conformite:"Nombre d'erreurs <= 5",worst:'orange'},
+    {code:'ITR_REP_PROJET_TSD',chap:'4.1.4',desc:'Reporting projet et TSD',cat:'SLA Transverse',type:'SLA',etat:'A cadrer',ciblage:'Rapports mensuels de pilotage',conformite:'Livraison avant le 5 du mois',worst:'yellow'},
+    {code:'ISD_APPEL_DECROCHE',chap:'4.3.1',desc:'Taux appels decroches',cat:'Service Desk',type:'SLA',etat:'Realise',ciblage:'Appels entrants sur la plage horaire',conformite:'Taux decroche >= 95%',worst:'orange'},
+    {code:'IQ_REQ_TRAITEMENT',chap:'4.4.1',desc:'Delai traitement des demandes',cat:'Process Demande',type:'SLA',etat:'En cours',ciblage:'Demandes standard catalogue',conformite:'80% traitees en 5 jours',worst:'yellow'},
+    {code:'IQ_PARC_STOCK',chap:'4.5.1',desc:'Gestion du stock',cat:'Gestion des stocks',type:'KPI',etat:'Realise',ciblage:'Materiel en stock actif',conformite:'Ecart inventaire < 2%',worst:'green'},
+    {code:'IQ_LOC_RESTIT',chap:'4.6.1',desc:'Restitution materiel location',cat:'Marche de location',type:'KPI',etat:'A cadrer',ciblage:'Materiel en fin de contrat de location',conformite:'100% restitue sous 30 jours',worst:'grey'},
+    {code:'IP_TENUE_COMITE',chap:'4.7.1',desc:'Tenue des comites de pilotage',cat:'Pilotage',type:'KPI',etat:'En cours',ciblage:'Comites mensuels et trimestriels',conformite:'100% des comites tenus',worst:'yellow'},
+    {code:'IP_ENVIRON_TRAVAIL',chap:'4.7.2',desc:'Environnement de travail',cat:'Pilotage',type:'XLA',etat:'En cours',ciblage:"Enquete de satisfaction trimestrielle",conformite:'Score >= 7/10',worst:'red'}
+];
+
+const globalWheelData = ['green','orange','red','yellow','grey','yellow','orange'];
+const categoryWheelData = ['green','green','red','yellow','grey','grey','yellow'];
+
+// 3-layer data for ITR_QUAL_REF_TECH
+const indData = [
+    {global:{color:null,comment:''},categorie:{color:null,comment:''},indicateur:{color:'green',comment:''}},
+    {global:{color:null,comment:''},categorie:{color:null,comment:''},indicateur:{color:'orange',comment:"Pas d'appareil de mesure\ndedie. Calcul manuel."}},
+    {global:{color:'red',comment:"Blocage acces BDD\npour tous les indicateurs"},categorie:{color:null,comment:''},indicateur:{color:'orange',comment:"Mesures dans fichiers Excel.\nReferentiels a fournir."}},
+    {global:{color:null,comment:''},categorie:{color:'yellow',comment:"Outils de preparation\nen cours de deploiement"},indicateur:{color:null,comment:''}},
+    {global:{color:null,comment:''},categorie:{color:null,comment:''},indicateur:{color:'grey',comment:''}},
+    {global:{color:null,comment:''},categorie:{color:null,comment:''},indicateur:{color:'yellow',comment:''}},
+    {global:{color:null,comment:''},categorie:{color:'orange',comment:"Chantier patrimoine\ndocumentaire en cours"},indicateur:{color:'orange',comment:"Voir dates avec equipe.\nPlanification a affiner."}}
+];
+
+// Status drill-down data (simulated)
+const GLOBAL_DRILL = {
+    red:[{cat:'Process Incident',inds:[{code:'IQ_INC_NON_RES',steps:[{s:'COLLECTE',c:'Aucune source identifiee'}]}]},
+         {cat:'Pilotage',inds:[{code:'IP_ENVIRON_TRAVAIL',steps:[{s:"Ce qu'on PEUT",c:'Definition non clarifiee'}]}]}],
+    orange:[{cat:'SLA Transverse',inds:[{code:'ITR_QUAL_REF_TECH',steps:[{s:"Ce qu'on PEUT",c:'Pas d\'appareil dedie'},{s:'COLLECTE',c:'Fichiers Excel'}]}]},
+            {cat:'Service Desk',inds:[{code:'ISD_APPEL_DECROCHE',steps:[{s:'DATA QUALITY',c:'Temps plancher en attente'}]}]}],
+    yellow:[{cat:'Process Demande',inds:[{code:'IQ_REQ_TRAITEMENT',steps:[{s:'COLLECTE',c:'Requetes en cours de dev'}]}]},
+            {cat:'Pilotage',inds:[{code:'IP_TENUE_COMITE',steps:[{s:'DATA VIZ & USAGE',c:'Solution Excel en cours'}]}]}],
+    green:[{cat:'Gestion des stocks',inds:[{code:'IQ_PARC_STOCK',steps:[{s:'Toutes etapes',c:''}]}]}],
+    grey:[{cat:'Marche de location',inds:[{code:'IQ_LOC_RESTIT',steps:[{s:'Non demarre',c:''}]}]}]
+};
+
+// Kanban cards with 2-level attachment
+const KANBAN_CARDS = [
+    {title:'Obtenir la liste exhaustive des referentiels',assignee:'Amin',step:'COLLECTE',level:'I',status:'todo'},
+    {title:'Definir le format de remontee',assignee:'Pascal G.',step:'DATA PREP',level:'I',status:'todo'},
+    {title:'Controle qualite des donnees',assignee:null,step:'DATA QUALITY',level:'I',status:'todo'},
+    {title:'Obtenir les acces a la BDD supervision',assignee:'P. Dupont',step:"Ce qu'on PEUT",level:'C',cat:'SLA Transverse',status:'todo'},
+    {title:'Cadrage patrimoine documentaire',assignee:'Gisele',step:"Ce qu'on PEUT",level:'I',status:'in_progress'},
+    {title:'Mise a jour referentiels contrat',assignee:'Chef de projet',step:"Ce qu'on VEUT",level:'C',cat:'SLA Transverse',status:'in_progress'},
+    {title:'Calcul manuel indicateur',assignee:'Equipe',step:'COLLECTE',level:'I',status:'in_progress'},
+    {title:'Identifier les sources de donnees',submitter:'P. Dupont',step:"Ce qu'on PEUT",level:'I',status:'review'},
+    {title:'Definir criteres de conformite',assignee:'P. Dupont',step:"Ce qu'on VEUT",level:'I',status:'done',date:'10/01/2026'},
+    {title:'Export automatise SCCM',assignee:'Amin',step:'COLLECTE',level:'I',status:'rejected',date:'05/01/2026',reason:'Hors perimetre actuel'}
+];
+
+// ===================================================================
+// HELPERS
+// ===================================================================
+function worstColor(sd){
+    const o={grey:0,green:1,yellow:2,orange:3,red:4};let w=-1,wc='grey';
+    ['global','categorie','indicateur'].forEach(k=>{const c=sd[k].color;if(c&&o[c]>w){w=o[c];wc=c;}});return wc;
+}
+function layerComments(sd){
+    const r=[];['global','categorie','indicateur'].forEach(k=>{const d=sd[k];if(d.comment)r.push({key:k,badge:LAYERS[k].b,bc:LAYERS[k].c,sc:d.color?COL[d.color]:'#333',lines:d.comment.split('\n')});});return r;
+}
+
+// ===================================================================
+// SVG
+// ===================================================================
+const svgNS='http://www.w3.org/2000/svg';
+function mk(t){return document.createElementNS(svgNS,t);}
+
+function drawSimpleWheel(id, data, opts={}){
+    const svg=document.getElementById(id);svg.innerHTML='';
+    const cx=220,cy=220,R=155,rx=48,ry=33,sa=-90;
+    const defs=mk('defs');defs.innerHTML=`<marker id="a-${id}" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#3a7bd5"/></marker>`;svg.appendChild(defs);
+    const pos=[];for(let i=0;i<7;i++){const a=(sa+i*360/7)*Math.PI/180;pos.push({x:cx+R*Math.cos(a),y:cy+R*Math.sin(a)});}
+    for(let i=0;i<7;i++){const a1=(sa+i*360/7+19)*Math.PI/180,a2=(sa+(i+1)*360/7-19)*Math.PI/180;const p=mk('path');p.setAttribute('d',`M${cx+R*Math.cos(a1)} ${cy+R*Math.sin(a1)} A${R} ${R} 0 0 1 ${cx+R*Math.cos(a2)} ${cy+R*Math.sin(a2)}`);p.setAttribute('class','arrow-path');p.setAttribute('marker-end',`url(#a-${id})`);svg.appendChild(p);}
+    for(let i=0;i<7;i++){
+        const g=mk('g');g.setAttribute('class','step-ellipse');
+        const ti=mk('title');ti.textContent=STEPS[i].short+': '+STEPS[i].tip.replace(/\n/g,' ');g.appendChild(ti);
+        if(opts.onClick){const idx=i;g.onclick=()=>opts.onClick(idx);}
+        const el=mk('ellipse');el.setAttribute('cx',pos[i].x);el.setAttribute('cy',pos[i].y);el.setAttribute('rx',rx);el.setAttribute('ry',ry);el.setAttribute('fill',COL[data[i]]);el.setAttribute('stroke','rgba(255,255,255,0.12)');el.setAttribute('stroke-width','2');g.appendChild(el);
+        const lines=STEPS[i].label.split('\n');const txt=mk('text');txt.setAttribute('class','step-label');txt.setAttribute('x',pos[i].x);txt.setAttribute('y',pos[i].y-(lines.length-1)*7);
+        lines.forEach((l,li)=>{const ts=mk('tspan');ts.setAttribute('x',pos[i].x);ts.setAttribute('dy',li?'14':'0');ts.textContent=l;txt.appendChild(ts);});
+        g.appendChild(txt);svg.appendChild(g);
+    }
+    if(opts.c1){const t=mk('text');t.setAttribute('class','center-title');t.setAttribute('x',cx);t.setAttribute('y',cy-8);t.textContent=opts.c1;svg.appendChild(t);}
+    if(opts.c2){const t=mk('text');t.setAttribute('class','center-date');t.setAttribute('x',cx);t.setAttribute('y',cy+14);t.textContent=opts.c2;svg.appendChild(t);}
+}
+
+function drawIndWheel(centerDate){
+    const svg=document.getElementById('wh-ind');svg.innerHTML='';
+    const cx=370,cy=245,R=150,rx=48,ry=33,sa=-90;
+    const defs=mk('defs');defs.innerHTML=`<marker id="a-ind" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#3a7bd5"/></marker>`;svg.appendChild(defs);
+    const pos=[];for(let i=0;i<7;i++){const a=(sa+i*360/7)*Math.PI/180;pos.push({x:cx+R*Math.cos(a),y:cy+R*Math.sin(a)});}
+    for(let i=0;i<7;i++){const a1=(sa+i*360/7+19)*Math.PI/180,a2=(sa+(i+1)*360/7-19)*Math.PI/180;const p=mk('path');p.setAttribute('d',`M${cx+R*Math.cos(a1)} ${cy+R*Math.sin(a1)} A${R} ${R} 0 0 1 ${cx+R*Math.cos(a2)} ${cy+R*Math.sin(a2)}`);p.setAttribute('class','arrow-path');p.setAttribute('marker-end','url(#a-ind)');svg.appendChild(p);}
+
+    // Comment slots
+    const slotDefs={6:{x:4,w:165,s:'left'},5:{x:4,w:165,s:'left'},0:{x:4,w:165,s:'left'},1:{x:590,w:165,s:'right'},2:{x:590,w:165,s:'right'},3:{x:590,w:165,s:'right'}};
+    function calcH(si){const ls=layerComments(indData[si]);if(!ls.length)return 0;let h=16;ls.forEach((l,i)=>{h+=14;h+=(l.lines.length-1)*12;if(i<ls.length-1)h+=3;});return h+6;}
+    function posSlots(list){let y=8;const r=[];list.forEach(si=>{const h=calcH(si);if(h>0){r.push({si,y,h});y+=h+8;}});return r;}
+    const allSlots=[...posSlots([6,5,0]),...posSlots([1,2,3])];
+
+    allSlots.forEach(slot=>{
+        const si=slot.si,sd=slotDefs[si];if(!sd)return;
+        const ls=layerComments(indData[si]);if(!ls.length)return;
+        const bx=sd.x,by=slot.y,bw=sd.w,bh=slot.h;
+        // connector line
+        const ln=mk('line');const ax=sd.s==='left'?bx+bw:bx;ln.setAttribute('x1',ax);ln.setAttribute('y1',by+bh/2);ln.setAttribute('x2',pos[si].x);ln.setAttribute('y2',pos[si].y);ln.setAttribute('class','comment-line');svg.appendChild(ln);
+        // group
+        const grp=mk('g');grp.style.cursor='pointer';
+        grp.onclick=()=>{if(isReadOnly){alert('Consultation historique - Lecture seule');return;}openModal(si,'indicateur');};
+        const tps=[];ls.forEach(l=>tps.push('['+l.badge+'] '+l.lines.join(' ')));
+        const gt=mk('title');gt.textContent=STEPS[si].short+'\n'+tps.join('\n');grp.appendChild(gt);
+        // box
+        const r=mk('rect');r.setAttribute('x',bx);r.setAttribute('y',by);r.setAttribute('width',bw);r.setAttribute('height',bh);r.setAttribute('class','comment-box-bg');r.setAttribute('rx','5');grp.appendChild(r);
+        // color bar
+        const wc=worstColor(indData[si]);const bar=mk('rect');bar.setAttribute('x',bx);bar.setAttribute('y',by);bar.setAttribute('width',3);bar.setAttribute('height',bh);bar.setAttribute('fill',COL[wc]);bar.setAttribute('rx','1');grp.appendChild(bar);
+        // step label
+        const sl=mk('text');sl.setAttribute('class','comment-step-label');sl.setAttribute('x',bx+10);sl.setAttribute('y',by+12);sl.textContent=STEPS[si].short;grp.appendChild(sl);
+        // layer comments
+        let cy2=by+24;const maxL=Math.floor((bw-34)/5.5);
+        ls.forEach(layer=>{
+            const br2=mk('rect');br2.setAttribute('x',bx+8);br2.setAttribute('y',cy2-9);br2.setAttribute('width',15);br2.setAttribute('height',12);br2.setAttribute('rx','2');br2.setAttribute('fill',layer.bc);grp.appendChild(br2);
+            const bt=mk('text');bt.setAttribute('class','comment-badge-text');bt.setAttribute('x',bx+15.5);bt.setAttribute('y',cy2-3);bt.textContent=layer.badge;grp.appendChild(bt);
+            layer.lines.forEach(line=>{
+                const tx=mk('text');tx.setAttribute('class','comment-text');tx.setAttribute('x',bx+27);tx.setAttribute('y',cy2);
+                tx.textContent=line.length>maxL?line.substring(0,maxL-2)+'..':line;grp.appendChild(tx);cy2+=12;
+            });
+            cy2+=3;
+        });
+        svg.appendChild(grp);
+    });
+
+    // Ellipses on top
+    for(let i=0;i<7;i++){
+        const wc=worstColor(indData[i]);const g=mk('g');g.setAttribute('class','step-ellipse');
+        const idx=i;g.onclick=()=>{if(isReadOnly){alert('Consultation historique - Lecture seule');return;}openModal(idx,'indicateur');};
+        const ti=mk('title');ti.textContent=STEPS[i].short+': '+STEPS[i].tip.replace(/\n/g,' ');g.appendChild(ti);
+        const el=mk('ellipse');el.setAttribute('cx',pos[i].x);el.setAttribute('cy',pos[i].y);el.setAttribute('rx',rx);el.setAttribute('ry',ry);el.setAttribute('fill',COL[wc]);el.setAttribute('stroke','rgba(255,255,255,0.12)');el.setAttribute('stroke-width','2');g.appendChild(el);
+        const lines=STEPS[i].label.split('\n');const txt=mk('text');txt.setAttribute('class','step-label');txt.setAttribute('x',pos[i].x);txt.setAttribute('y',pos[i].y-(lines.length-1)*7);
+        lines.forEach((l,li)=>{const ts=mk('tspan');ts.setAttribute('x',pos[i].x);ts.setAttribute('dy',li?'14':'0');ts.textContent=l;txt.appendChild(ts);});
+        g.appendChild(txt);svg.appendChild(g);
+    }
+    // Center
+    const ct=mk('text');ct.setAttribute('class','center-title');ct.setAttribute('x',cx);ct.setAttribute('y',cy-6);ct.textContent=currentIndCode;svg.appendChild(ct);
+    const cd=mk('text');cd.setAttribute('class','center-date');cd.setAttribute('x',cx);cd.setAttribute('y',cy+14);cd.textContent=centerDate||'16/02/2026';svg.appendChild(cd);
+}
+
+// ===================================================================
+// INLINE COUNTERS
+// ===================================================================
+function updateCounters(){
+    const el=document.getElementById('counters');
+    const counts=[{c:'green',n:12,l:'Conformes'},{c:'yellow',n:18,l:'En cours'},{c:'orange',n:9,l:'Warning'},{c:'red',n:3,l:'Blocage'},{c:'grey',n:7,l:'Non eval.'}];
+    el.innerHTML=counts.map(x=>`<span class="ic" title="${x.l}"><span class="icd" style="background:${COL[x.c]}"></span>${x.n}</span>`).join('');
+}
+
+// ===================================================================
+// STATUS PANELS
+// ===================================================================
+function buildSP(id, drillId, counts, drillData){
+    const el=document.getElementById(id);
+    el.innerHTML=STATUS_ORDER.map(c=>
+        `<div class="status-filter-item" onclick="toggleDrill('${id}','${drillId}','${c}')" data-color="${c}"><span class="sf-dot" style="background:${COL[c]}"></span><span class="sf-label">${COL_L[c]}</span><span class="sf-count">${counts[c]||0}</span></div>`
+    ).join('');
+    el._drill=drillData;
+}
+
+function toggleDrill(panelId, drillId, color){
+    const panel=document.getElementById(panelId);
+    const drill=document.getElementById(drillId);
+    const items=panel.querySelectorAll('.status-filter-item');
+    const wasOpen=drill.classList.contains('open')&&drill.dataset.color===color;
+    items.forEach(i=>i.classList.remove('active'));
+    if(wasOpen){drill.classList.remove('open');return;}
+    drill.dataset.color=color;
+    const item=[...items].find(i=>i.dataset.color===color);if(item)item.classList.add('active');
+    const data=panel._drill[color]||[];
+    let html='';
+    data.forEach(cat=>{
+        html+=`<div class="sd-cat-header" onclick="navCategory('${cat.cat}')"><span class="sf-dot" style="background:${COL[color]};width:7px;height:7px"></span>${cat.cat} (${cat.inds.length})</div>`;
+        cat.inds.forEach(ind=>{
+            html+=`<div class="sd-indicator" onclick="navIndicator('${ind.code}')"><div class="sd-ind-code">${ind.code}</div>`;
+            ind.steps.forEach(st=>{html+=`<div class="sd-ind-step">${st.s}</div>`;if(st.c)html+=`<div class="sd-ind-comment">${st.c}</div>`;});
+            html+=`</div>`;
+        });
+    });
+    drill.innerHTML=html;drill.classList.add('open');
+}
+
+function buildIndSP(){
+    const counts={grey:0,green:0,yellow:0,orange:0,red:0};
+    indData.forEach(d=>counts[worstColor(d)]++);
+    // Build drill data for indicator
+    const drillData={};
+    STATUS_ORDER.forEach(c=>{
+        const steps=[];
+        indData.forEach((d,i)=>{if(worstColor(d)===c){
+            const cmts=[];['global','categorie','indicateur'].forEach(k=>{if(d[k].comment)cmts.push('['+LAYERS[k].b+'] '+d[k].comment.split('\n')[0]);});
+            steps.push({s:STEPS[i].short,c:cmts.join(' | ')});
+        }});
+        if(steps.length)drillData[c]=[{cat:'Etapes',inds:[{code:currentIndCode,steps}]}];
+    });
+    buildSP('sp-ind','sd-ind',counts,drillData);
+}
+
+// ===================================================================
+// FICHE PANEL
+// ===================================================================
+let currentIndCode='ITR_QUAL_REF_TECH';
+
+function showFiche(code){
+    const ind=INDICATORS.find(i=>i.code===code);if(!ind)return;
+    currentIndCode=code;
+    const tc=ind.type==='SLA'?'fb-sla':ind.type==='KPI'?'fb-kpi':'fb-xla';
+    document.getElementById('fiche-inner').innerHTML=`
+        <div class="fiche-title">${ind.code}</div>
+        <div class="fiche-desc">${ind.desc}</div>
+        <div class="fiche-badges">
+            <span class="fiche-badge ${tc}">${ind.type}</span>
+            <span class="fiche-badge fb-etat">${ind.etat}</span>
+            <span class="fiche-badge" style="background:${COL[ind.worst]}20;color:${COL[ind.worst]};border:1px solid ${COL[ind.worst]}40">${COL_L[ind.worst]}</span>
+        </div>
+        <div class="fiche-field"><label>Chapitre</label><div class="val">${ind.chap}</div></div>
+        <div class="fiche-field"><label>Categorie</label><div class="val">${ind.cat}</div></div>
+        <div class="fiche-field"><label>Condition de ciblage</label><div class="val-box">${ind.ciblage}</div><span class="fiche-edit">Modifier</span></div>
+        <div class="fiche-field"><label>Condition de conformite</label><div class="val-box">${ind.conformite}</div><span class="fiche-edit">Modifier</span></div>
+        <div class="fiche-actions-link" onclick="navKanban('${ind.code}','${ind.desc}')">Actions (Kanban) &rsaquo;</div>`;
+    document.getElementById('fiche-panel').classList.add('visible');
+}
+function hideFiche(){document.getElementById('fiche-panel').classList.remove('visible');}
+
+// ===================================================================
+// SIDEBAR
+// ===================================================================
+let currentView='global', currentSection='roue';
+
+function buildSidebar(){
+    const sb=document.getElementById('sidebar');let h='';
+    if(currentSection==='ref'){
+        h+='<div class="sidebar-section"><h4>Filtres rapides</h4>';
+        h+='<div class="sidebar-item active" onclick="qfCat(this,\'all\')"><span style="color:#888">Tous</span><span class="sidebar-count">'+INDICATORS.length+'</span></div>';
+        CATEGORIES.forEach(c=>{const n=INDICATORS.filter(i=>i.cat===c.name).length;
+            h+=`<div class="sidebar-item" onclick="qfCat(this,'${c.name}')"><span class="sidebar-dot" style="background:${COL[c.worst]}"></span><span>${c.name}</span><span class="sidebar-count">${n}</span></div>`;
+        });h+='</div>';
+    } else if(currentView==='global'){
+        h+='<div class="sidebar-section"><h4>Categories</h4>';
+        CATEGORIES.forEach(c=>{
+            h+=`<div class="sidebar-item" onclick="navCategory('${c.name}')" title="${c.name} - ${c.count} indicateurs"><span class="sidebar-dot" style="background:${COL[c.worst]}"></span><span>${c.name}</span><span class="sidebar-count">${c.count}</span></div>`;
+        });h+='</div>';
+    } else if(currentView==='category'){
+        h+='<div class="sidebar-section"><h4>Categories</h4>';
+        CATEGORIES.forEach(c=>{
+            const cls=c.name===currentCatName?' active':'';
+            h+=`<div class="sidebar-item${cls}" onclick="navCategory('${c.name}')" title="${c.name}"><span class="sidebar-dot" style="background:${COL[c.worst]}"></span><span>${c.name}</span></div>`;
+        });
+        h+='</div><div class="sidebar-divider"></div><div class="sidebar-section"><h4>Indicateurs</h4>';
+        INDICATORS.filter(i=>i.cat===currentCatName).forEach(ind=>{
+            h+=`<div class="sidebar-item" onclick="navIndicator('${ind.code}')" title="${ind.code} : ${ind.desc}"><span class="sidebar-dot" style="background:${COL[ind.worst]}"></span><span style="font-size:10px">${ind.code}</span></div>`;
+        });h+='</div>';
+    } else {
+        h+='<div class="sidebar-section"><h4>Categories</h4>';
+        CATEGORIES.forEach(c=>{
+            h+=`<div class="sidebar-item" onclick="navCategory('${c.name}')"><span class="sidebar-dot" style="background:${COL[c.worst]}"></span><span>${c.name}</span></div>`;
+        });
+        h+='</div><div class="sidebar-divider"></div><div class="sidebar-section"><h4>Indicateurs</h4>';
+        const cat=INDICATORS.find(i=>i.code===currentIndCode)?.cat;
+        INDICATORS.filter(i=>i.cat===cat).forEach(ind=>{
+            const cls=ind.code===currentIndCode?' active':'';
+            h+=`<div class="sidebar-item${cls}" onclick="navIndicator('${ind.code}')" title="${ind.code} : ${ind.desc}"><span class="sidebar-dot" style="background:${COL[ind.worst]}"></span><span style="font-size:10px">${ind.code}</span></div>`;
+        });h+='</div>';
+    }
+    sb.innerHTML=h;
+}
+
+// ===================================================================
+// NAVIGATION
+// ===================================================================
+let currentCatName='Process Incident';
+let isReadOnly=false;
+
+function hideAllViews(){['view-global','view-category','view-indicator','view-kanban'].forEach(v=>document.getElementById(v).style.display='none');}
+function closeDrills(){['drill-global','drill-cat'].forEach(id=>document.getElementById(id).style.display='none');
+    ['sd-global','sd-cat','sd-ind'].forEach(id=>document.getElementById(id).classList.remove('open'));
+    document.querySelectorAll('.status-filter-item').forEach(i=>i.classList.remove('active'));
+}
+
+function navGlobal(){
+    currentView='global';currentSection='roue';isReadOnly=false;hideFiche();closeDrills();hideAllViews();
+    document.getElementById('view-global').style.display='';
+    document.getElementById('breadcrumb').innerHTML='<span class="current">Vue Globale</span>';
+    document.getElementById('ro-banner').classList.remove('visible');
+    activateSection('roue');buildSidebar();
+}
+function navCategory(name){
+    currentView='category';currentSection='roue';currentCatName=name;isReadOnly=false;hideFiche();closeDrills();hideAllViews();
+    document.getElementById('view-category').style.display='';
+    document.getElementById('cat-title').textContent=name;
+    const count=INDICATORS.filter(i=>i.cat===name).length;
+    document.getElementById('cat-subtitle').textContent=count+' indicateurs';
+    document.getElementById('breadcrumb').innerHTML='<a onclick="navGlobal()">Global</a><span class="sep"> &rsaquo; </span><span class="current">'+name+'</span>';
+    document.getElementById('ro-banner').classList.remove('visible');
+    activateSection('roue');buildSidebar();
+}
+function navIndicator(code){
+    currentView='indicator';currentSection='roue';isReadOnly=false;closeDrills();hideAllViews();
+    const ind=INDICATORS.find(i=>i.code===code);if(!ind)return;
+    currentIndCode=code;
+    document.getElementById('view-indicator').style.display='';
+    document.getElementById('ind-title').textContent=ind.code;
+    document.getElementById('ind-subtitle').textContent=ind.desc;
+    document.getElementById('breadcrumb').innerHTML='<a onclick="navGlobal()">Global</a><span class="sep"> &rsaquo; </span><a onclick="navCategory(\''+ind.cat+'\')">'+ind.cat+'</a><span class="sep"> &rsaquo; </span><span class="current">'+ind.code+'</span>';
+    document.getElementById('ro-banner').classList.remove('visible');
+    showFiche(code);drawIndWheel();buildIndSP();
+    // Reset history selection
+    document.querySelectorAll('.history-date').forEach((d,i)=>d.classList.toggle('active',i===0));
+    activateSection('roue');buildSidebar();
+}
+function navKanban(code, desc){
+    currentView='kanban';currentSection='roue';closeDrills();hideAllViews();
+    document.getElementById('view-kanban').style.display='';
+    document.getElementById('kanban-title').textContent='Actions - '+code;
+    document.getElementById('kanban-subtitle').textContent=desc;
+    document.getElementById('breadcrumb').innerHTML='<a onclick="navGlobal()">Global</a><span class="sep"> &rsaquo; </span><a onclick="navIndicator(\''+code+'\')">'+code+'</a><span class="sep"> &rsaquo; </span><span class="current">Actions</span>';
+    buildKanban();activateSection('roue');buildSidebar();
+}
+
+function activateSection(s){
+    document.querySelectorAll('.section').forEach(el=>el.classList.remove('active'));
+    document.getElementById('section-'+s).classList.add('active');
+    document.querySelectorAll('.main-tab').forEach(t=>t.classList.remove('active'));
+    document.getElementById('tab-'+s).classList.add('active');
+}
+
+function switchSection(s){
+    currentSection=s;
+    if(s==='ref'){hideFiche();buildRefTable();updateRefStats();}
+    else if(currentView==='indicator')showFiche(currentIndCode);
+    activateSection(s);buildSidebar();
+}
+
+// ===================================================================
+// DRILL TABLES
+// ===================================================================
+function showGlobalDrill(i){
+    document.getElementById('drill-global-title').innerHTML='Etape : '+STEPS[i].short+' <span class="drill-edit" onclick="openModal('+i+',\'global\')">Modifier statut global</span>';
+    const b=document.getElementById('drill-global-body');b.innerHTML='';
+    CATEGORIES.forEach(c=>{const tr=document.createElement('tr');tr.onclick=()=>navCategory(c.name);tr.innerHTML=`<td>${c.name}</td><td><span class="status-dot" style="background:${COL[c.worst]}"></span>${COL_L[c.worst]}</td><td>${c.count}</td>`;b.appendChild(tr);});
+    document.getElementById('drill-global').style.display='block';
+}
+function showCatDrill(i){
+    document.getElementById('drill-cat-title').innerHTML='Etape : '+STEPS[i].short+' <span class="drill-edit" onclick="openModal('+i+',\'categorie\')">Modifier statut categorie</span>';
+    const b=document.getElementById('drill-cat-body');b.innerHTML='';
+    INDICATORS.filter(ind=>ind.cat===currentCatName).forEach(ind=>{const tr=document.createElement('tr');tr.onclick=()=>navIndicator(ind.code);tr.innerHTML=`<td style="font-weight:600">${ind.code}</td><td>${ind.desc}</td><td><span class="status-dot" style="background:${COL[ind.worst]}"></span>${COL_L[ind.worst]}</td>`;b.appendChild(tr);});
+    document.getElementById('drill-cat').style.display='block';
+}
+
+// ===================================================================
+// MODAL
+// ===================================================================
+let editIdx=-1, currentLayer='indicateur';
+
+function openModal(stepIdx, context){
+    if(isReadOnly){alert('Consultation historique - Lecture seule');return;}
+    editIdx=stepIdx;
+    document.getElementById('modal-title').textContent='Etape : '+STEPS[stepIdx].short;
+    const tabsEl=document.getElementById('modal-tabs');
+    // Build tabs based on context
+    if(context==='global'){
+        tabsEl.innerHTML=`<div class="modal-tab active" data-layer="global"><span class="tab-badge" style="background:${LAYERS.global.c}">G</span> Global</div>`;
+        currentLayer='global';
+    } else if(context==='categorie'){
+        tabsEl.innerHTML=`<div class="modal-tab active" data-layer="categorie"><span class="tab-badge" style="background:${LAYERS.categorie.c}">C</span> Categorie</div>`;
+        currentLayer='categorie';
+    } else {
+        tabsEl.innerHTML=['global','categorie','indicateur'].map(k=>
+            `<div class="modal-tab${k==='indicateur'?' active':''}" data-layer="${k}" onclick="switchTab('${k}')"><span class="tab-badge" style="background:${LAYERS[k].c}">${LAYERS[k].b}</span> ${LAYERS[k].label}</div>`
+        ).join('');
+        currentLayer='indicateur';
+    }
+    document.getElementById('btn-clear').style.display=(context==='indicateur')?'block':'none';
+    loadTabData();
+    document.getElementById('modal-overlay').classList.add('active');
+}
+
+function switchTab(layer){
+    currentLayer=layer;
+    document.querySelectorAll('.modal-tab').forEach(t=>t.classList.toggle('active',t.dataset.layer===layer));
+    loadTabData();
+}
+
+function loadTabData(){
+    document.getElementById('modal-note').textContent=LAYERS[currentLayer].note;
+    const data=indData[editIdx][currentLayer];
+    const selVal=data.color||'none';
+    document.querySelectorAll('.color-btn').forEach(b=>b.classList.toggle('selected',b.dataset.color===selVal));
+    document.getElementById('modal-comment').value=data.comment.replace(/\\n/g,'\n');
+}
+
+function selColor(btn){document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected');}
+function closeModal(){document.getElementById('modal-overlay').classList.remove('active');}
+function clearLayer(){indData[editIdx][currentLayer].color=null;indData[editIdx][currentLayer].comment='';loadTabData();}
+
+function saveModal(){
+    if(editIdx>=0){
+        const sel=document.querySelector('.color-btn.selected');
+        const c=sel?sel.dataset.color:'none';
+        indData[editIdx][currentLayer].color=(c==='none')?null:c;
+        indData[editIdx][currentLayer].comment=document.getElementById('modal-comment').value;
+        if(currentView==='indicator'){drawIndWheel();buildIndSP();}
+    }
+    closeModal();
+}
+
+// ===================================================================
+// HISTORY (read-only toggle)
+// ===================================================================
+function selectDate(dateStr, isCurrent){
+    isReadOnly=!isCurrent;
+    document.querySelectorAll('.history-date').forEach(d=>d.classList.toggle('active',d.textContent===dateStr));
+    const banner=document.getElementById('ro-banner');
+    if(isCurrent){banner.classList.remove('visible');drawIndWheel();}
+    else{banner.textContent='Consultation historique du '+dateStr+' - Lecture seule';banner.classList.add('visible');drawIndWheel(dateStr);}
+}
+
+// ===================================================================
+// KANBAN
+// ===================================================================
+function buildKanban(){
+    const cols={todo:{title:'A faire',cards:[]},in_progress:{title:'En cours',cards:[]},review:{title:'A valider',cards:[]},done:{title:'Termine',cards:[]},rejected:{title:'Rejete',cards:[]}};
+    KANBAN_CARDS.forEach(c=>cols[c.status]?.cards.push(c));
+    const board=document.getElementById('kanban-board');board.innerHTML='';
+    Object.values(cols).forEach(col=>{
+        const div=document.createElement('div');div.className='kanban-column';
+        let h=`<h4>${col.title} <span class="kcount">${col.cards.length}</span></h4>`;
+        col.cards.forEach(card=>{
+            const isCat=card.level==='C';
+            const borderColor=card.status==='done'?'#22c55e':card.status==='rejected'?'#dc2626':card.status==='review'?'#a0c4ff':card.status==='in_progress'?'#eab308':'#3a7bd5';
+            h+=`<div class="kanban-card${isCat?' cat-card':''}" style="border-left-color:${borderColor}">`;
+            h+=`<div class="card-title">${card.title}</div>`;
+            if(card.assignee)h+=`<div class="card-meta">Assigne : ${card.assignee}</div>`;
+            if(card.submitter)h+=`<div class="card-meta">Soumis par : ${card.submitter}</div>`;
+            if(card.date)h+=`<div class="card-meta">${card.status==='done'?'Realise':'Rejete'} : ${card.date}</div>`;
+            if(card.reason)h+=`<div class="card-meta" style="color:#dc2626;margin-top:3px">Motif : ${card.reason}</div>`;
+            h+=`<div class="card-step">${card.step}</div>`;
+            if(isCat)h+=`<span class="cat-badge">C ${card.cat}</span>`;
+            h+=`</div>`;
+        });
+        div.innerHTML=h;board.appendChild(div);
+    });
+}
+
+// ===================================================================
+// REFERENTIEL
+// ===================================================================
+function getFiltered(){
+    const search=document.getElementById('ref-search').value.toLowerCase();
+    const cat=document.getElementById('ref-cat-filter').value;
+    const type=document.getElementById('ref-type-filter').value;
+    const etat=document.getElementById('ref-etat-filter').value;
+    return INDICATORS.filter(i=>{
+        if(cat!=='all'&&i.cat!==cat)return false;if(type!=='all'&&i.type!==type)return false;
+        if(etat!=='all'&&i.etat!==etat)return false;
+        if(search&&!i.code.toLowerCase().includes(search)&&!i.desc.toLowerCase().includes(search)&&!i.ciblage.toLowerCase().includes(search))return false;
+        return true;
+    });
+}
+function buildRefTable(){
+    const body=document.getElementById('ref-body');body.innerHTML='';
+    getFiltered().forEach(ind=>{
+        const tr=document.createElement('tr');
+        const tc=ind.type==='SLA'?'type-sla':ind.type==='KPI'?'type-kpi':'type-xla';
+        const ec=ind.etat==='Realise'?'etat-realise':ind.etat==='En cours'?'etat-encours':'etat-acadrer';
+        tr.innerHTML=`<td><span class="status-dot" style="background:${COL[ind.worst]}"></span></td><td style="color:#888;font-size:11px">${ind.chap}</td><td style="font-weight:600;white-space:nowrap">${ind.code}</td><td>${ind.desc}</td><td style="color:#777;font-size:11px">${ind.cat}</td><td><span class="type-badge ${tc}">${ind.type}</span></td><td><span class="etat-badge ${ec}">${ind.etat}</span></td><td style="font-size:11px;color:#999;max-width:140px" title="${ind.ciblage}">${ind.ciblage.length>25?ind.ciblage.substring(0,23)+'...':ind.ciblage}</td><td style="font-size:11px;color:#999;max-width:140px" title="${ind.conformite}">${ind.conformite.length>25?ind.conformite.substring(0,23)+'...':ind.conformite}</td><td><span class="roue-link" onclick="event.stopPropagation();switchSection('roue');navIndicator('${ind.code}')">Voir roue</span></td>`;
+        tr.onclick=()=>{switchSection('roue');navIndicator(ind.code);};
+        body.appendChild(tr);
+    });
+}
+function updateRefStats(){
+    const f=getFiltered();const c={green:0,yellow:0,orange:0,red:0,grey:0};f.forEach(i=>c[i.worst]++);
+    document.getElementById('ref-stats').innerHTML=
+        STATUS_ORDER.map(k=>`<span class="ref-stat"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${COL[k]}"></span><span class="n">${c[k]}</span> ${COL_L[k]}</span>`).join('')+
+        `<span class="ref-stat" style="margin-left:auto;color:#a0c4ff;font-weight:600">${f.length}/${INDICATORS.length}</span>`;
+}
+function filterRef(){buildRefTable();updateRefStats();}
+function qfCat(el,cat){document.getElementById('ref-cat-filter').value=cat;filterRef();document.querySelectorAll('.sidebar-item').forEach(i=>i.classList.remove('active'));el.classList.add('active');}
+
+// ===================================================================
+// INIT
+// ===================================================================
+// Populate category filter
+const catSel=document.getElementById('ref-cat-filter');
+CATEGORIES.forEach(c=>{const o=document.createElement('option');o.value=c.name;o.textContent=c.name;catSel.appendChild(o);});
+
+// Draw wheels
+drawSimpleWheel('wh-global',globalWheelData,{c1:'VUE GLOBALE',c2:'49 indicateurs',onClick:showGlobalDrill});
+drawSimpleWheel('wh-cat',categoryWheelData,{c1:'Process Incident',c2:'10 indicateurs',onClick:showCatDrill});
+
+// Status panels
+buildSP('sp-global','sd-global',{green:12,yellow:18,orange:9,red:3,grey:7},GLOBAL_DRILL);
+buildSP('sp-cat','sd-cat',{green:5,yellow:2,orange:1,red:1,grey:1},{
+    red:[{cat:'Process Incident',inds:[{code:'IQ_INC_NON_RES',steps:[{s:'COLLECTE',c:'Aucune source identifiee'}]}]}],
+    orange:[{cat:'Process Incident',inds:[{code:'IQ_INC_ESCAL',steps:[{s:'COLLECTE',c:'Consolidation requise'}]}]}],
+    yellow:[{cat:'Process Incident',inds:[{code:'IQ_INC_2A',steps:[{s:'DATA PREP',c:'Mapping en cours'}]},{code:'IQ_INC_REOPEN',steps:[{s:'DATA QUALITY',c:'Verification'}]}]}],
+    green:[{cat:'Process Incident',inds:[{code:'IQ_INC_1',steps:[{s:'Toutes',c:''}]},{code:'IQ_INC_2',steps:[{s:'Toutes',c:''}]}]}],
+    grey:[{cat:'Process Incident',inds:[{code:'IQ_INC_PROP',steps:[{s:'Non demarre',c:''}]}]}]
+});
+
+updateCounters();
+buildSidebar();
+buildRefTable();
+updateRefStats();
+</script>
+</body>
+</html>

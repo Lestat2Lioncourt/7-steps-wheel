@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Roue CSI - {{ data.categorie.nom }}{% endblock %}
+
+{% block breadcrumb %}
+<a href="{{ url_for('main.vue_globale') }}">Global</a>
+<span class="sep"> &rsaquo; </span>
+<span class="current">{{ data.categorie.nom }}</span>
+{% endblock %}
+
+{% block sidebar %}
+<div class="sidebar-section">
+    <h4>Categories</h4>
+    {% for cat in data.categories %}
+    <a class="sidebar-item{% if cat.id == data.categorie.id %} active{% endif %}"
+       href="{{ url_for('main.vue_categorie', id=cat.id) }}"
+       title="{{ cat.nom }}">
+        <span class="sidebar-dot" style="background:{{ COL[cat.worst] }}"></span>
+        <span>{{ cat.nom }}</span>
+    </a>
+    {% endfor %}
+</div>
+<div class="sidebar-divider"></div>
+<div class="sidebar-section">
+    <h4>Indicateurs</h4>
+    {% for ind in data.indicateurs %}
+    <a class="sidebar-item" href="{{ url_for('main.vue_indicateur', id=ind.id) }}"
+       title="{{ ind.code }} : {{ ind.description }}">
+        <span class="sidebar-dot" style="background:{{ COL[ind.worst] }}"></span>
+        <span style="font-size:10px">{{ ind.code }}</span>
+    </a>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="view-header">
+    <div>
+        <h2>{{ data.categorie.nom }}</h2>
+        <div class="subtitle">{{ data.total }} indicateurs</div>
+    </div>
+</div>
+<div class="wheel-area">
+    <svg id="wh-cat" width="440" height="440" viewBox="0 0 440 440"></svg>
+    <div class="right-panels">
+        <div id="sp-cat"></div>
+    </div>
+</div>
+<div class="hint">Cliquez sur une etape de la roue pour voir le detail</div>
+<div class="drill-edit" id="drill-area"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var wheelColors = {{ data.wheel_colors|tojson }};
+    var statusCounts = {{ data.status_counts|tojson }};
+    var drillData = {{ drill_data|tojson }};
+    var catLayerValues = {{ cat_layer_values|tojson }};
+    var categorieId = {{ data.categorie.id }};
+
+    drawSimpleWheel('wh-cat', wheelColors, {
+        c1: '{{ data.categorie.nom }}',
+        c2: '{{ data.total }} indicateurs',
+        onClick: function(idx) {
+            showCatDrill(idx, drillData, catLayerValues, categorieId);
+        }
+    });
+
+    buildStatusPanel('sp-cat', statusCounts);
+})();
+</script>
+{% endblock %}

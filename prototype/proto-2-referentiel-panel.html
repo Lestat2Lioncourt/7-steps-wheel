@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roue CSI - Prototype 2+3 (Referentiel + Panel)</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Segoe UI',Tahoma,sans-serif; background:#1a1a2e; color:#e0e0e0; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+        /* Topbar with main tabs */
+        .topbar { background:#16213e; padding:0 24px; display:flex; align-items:stretch; border-bottom:2px solid #0f3460; flex-shrink:0; }
+        .topbar h1 { font-size:18px; color:#e94560; white-space:nowrap; display:flex; align-items:center; margin-right:24px; }
+        .main-tabs { display:flex; gap:0; }
+        .main-tab {
+            padding:14px 22px; cursor:pointer; font-size:13px; font-weight:600;
+            color:#666; border-bottom:3px solid transparent; transition:all 0.2s;
+            display:flex; align-items:center; gap:8px;
+        }
+        .main-tab:hover { color:#aaa; }
+        .main-tab.active { color:#fff; border-bottom-color:#e94560; }
+        .main-tab .tab-icon { font-size:16px; }
+        .breadcrumb { display:flex; gap:8px; align-items:center; font-size:13px; margin-left:auto; }
+        .breadcrumb a { color:#a0c4ff; text-decoration:none; cursor:pointer; }
+        .breadcrumb .sep { color:#555; }
+        .breadcrumb .current { color:#fff; font-weight:600; }
+
+        .main-layout { display:flex; flex:1; overflow:hidden; }
+
+        /* Sidebar */
+        .sidebar { width:240px; min-width:240px; background:#16213e; border-right:1px solid #0f3460; overflow-y:auto; flex-shrink:0; }
+        .sidebar-section { padding:14px; }
+        .sidebar-section h4 { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#555; margin-bottom:8px; }
+        .sidebar-item { display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:5px; cursor:pointer; font-size:12px; transition:background 0.15s; margin-bottom:1px; }
+        .sidebar-item:hover { background:#1a2744; }
+        .sidebar-item.active { background:#0f3460; color:#fff; }
+        .sidebar-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+        .sidebar-count { margin-left:auto; font-size:10px; color:#444; }
+        .sidebar-divider { height:1px; background:#0f3460; margin:4px 14px; }
+
+        /* Content */
+        .content { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+        .section { display:none; flex:1; flex-direction:column; }
+        .section.active { display:flex; }
+
+        /* Wheel section */
+        .wheel-area { display:flex; justify-content:center; padding:16px 20px; flex-shrink:0; }
+        .step-ellipse { cursor:pointer; transition:filter 0.2s; }
+        .step-ellipse:hover { filter:brightness(1.2) drop-shadow(0 0 8px rgba(255,255,255,0.3)); }
+        .step-label { pointer-events:none; font-weight:600; font-size:12px; fill:#fff; text-anchor:middle; dominant-baseline:central; }
+        .arrow-path { fill:none; stroke:#3a7bd5; stroke-width:2.5; }
+        .center-title { font-size:12px; fill:#777; text-anchor:middle; }
+        .center-date { font-size:18px; fill:#fff; text-anchor:middle; font-weight:700; }
+        .summary-cards { display:flex; gap:10px; justify-content:center; padding:14px 20px 0; flex-wrap:wrap; flex-shrink:0; }
+        .summary-card { background:#16213e; border-radius:8px; padding:10px 18px; text-align:center; min-width:90px; }
+        .summary-card .number { font-size:22px; font-weight:700; }
+        .summary-card .label { font-size:10px; color:#888; margin-top:1px; }
+        .sc-green .number{color:#22c55e} .sc-yellow .number{color:#eab308} .sc-orange .number{color:#f97316} .sc-red .number{color:#dc2626} .sc-grey .number{color:#6b7280}
+        .hint { text-align:center; color:#444; font-size:11px; padding:8px; flex-shrink:0; }
+
+        /* Referentiel section */
+        .ref-header { padding:20px 28px 12px; flex-shrink:0; }
+        .ref-header h2 { font-size:20px; color:#fff; margin-bottom:4px; }
+        .ref-header .subtitle { font-size:13px; color:#777; }
+        .ref-toolbar { display:flex; gap:12px; align-items:center; padding:0 28px 14px; flex-wrap:wrap; flex-shrink:0; }
+        .search-input { background:#0f1a30; border:1px solid #333; border-radius:6px; padding:8px 14px; color:#e0e0e0; font-size:13px; width:280px; }
+        .search-input::placeholder { color:#555; }
+        .filter-select { background:#0f1a30; border:1px solid #333; border-radius:6px; padding:7px 12px; color:#e0e0e0; font-size:12px; cursor:pointer; }
+        .filter-select option { background:#0f1a30; }
+        .ref-stats { display:flex; gap:12px; padding:0 28px 12px; flex-shrink:0; }
+        .ref-stat { font-size:12px; color:#888; display:flex; align-items:center; gap:4px; }
+        .ref-stat .dot { width:8px; height:8px; border-radius:50%; }
+        .ref-stat .n { font-weight:700; color:#e0e0e0; }
+
+        .table-area { padding:0 28px 20px; overflow-y:auto; flex:1; }
+        .ref-table { width:100%; border-collapse:collapse; font-size:12px; }
+        .ref-table th { background:#0f3460; padding:9px 12px; text-align:left; color:#a0c4ff; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; position:sticky; top:0; z-index:2; white-space:nowrap; cursor:pointer; }
+        .ref-table th:hover { background:#1a4a80; }
+        .ref-table td { padding:8px 12px; border-bottom:1px solid #1a1a2e; transition:background 0.15s; }
+        .ref-table tr { cursor:pointer; }
+        .ref-table tr:hover td { background:#1a2744; }
+        .status-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+        .type-badge { display:inline-block; padding:1px 8px; border-radius:8px; font-size:10px; font-weight:600; }
+        .type-sla { background:#0f3460; color:#a0c4ff; }
+        .type-kpi { background:#1a3020; color:#66bb6a; }
+        .type-xla { background:#302010; color:#ffb74d; }
+        .etat-badge { display:inline-block; padding:1px 8px; border-radius:8px; font-size:10px; }
+        .etat-realise { background:#1a3020; color:#66bb6a; }
+        .etat-encours { background:#302a10; color:#eab308; }
+        .etat-acadrer { background:#201520; color:#ce93d8; }
+        .etat-attente { background:#1a1a2e; color:#888; }
+        .roue-link { color:#a0c4ff; font-size:11px; text-decoration:none; cursor:pointer; white-space:nowrap; }
+        .roue-link:hover { text-decoration:underline; }
+
+        /* Slide panel */
+        .slide-panel { position:fixed; top:0; right:-440px; width:440px; height:100vh; background:#16213e; border-left:2px solid #0f3460; box-shadow:-10px 0 40px rgba(0,0,0,0.5); z-index:50; transition:right 0.3s ease; overflow-y:auto; }
+        .slide-panel.open { right:0; }
+        .slide-panel-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid #0f3460; }
+        .slide-panel-header h3 { color:#e94560; font-size:16px; }
+        .close-btn { background:none; border:none; color:#888; font-size:20px; cursor:pointer; padding:4px 8px; border-radius:4px; }
+        .close-btn:hover { background:#0f1a30; color:#fff; }
+        .panel-body { padding:20px; }
+        .panel-field { margin-bottom:14px; }
+        .panel-field label { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#555; display:block; margin-bottom:4px; }
+        .panel-field .value { font-size:13px; color:#e0e0e0; line-height:1.5; }
+        .panel-field .value.highlight { background:#0f1a30; padding:8px 12px; border-radius:6px; border-left:3px solid #3a7bd5; }
+        .panel-nav { display:flex; gap:8px; margin-top:18px; }
+        .panel-nav-link { display:inline-block; padding:8px 16px; border-radius:6px; text-decoration:none; cursor:pointer; font-size:12px; font-weight:600; }
+        .panel-nav-link.primary { background:#e94560; color:#fff; }
+        .panel-nav-link.secondary { background:#0f3460; color:#a0c4ff; }
+        .panel-nav-link:hover { filter:brightness(1.15); }
+        .panel-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.3); z-index:40; display:none; }
+        .panel-overlay.open { display:block; }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <h1>ROUE CSI</h1>
+    <div class="main-tabs">
+        <div class="main-tab active" onclick="switchSection('roue')" id="tab-roue">
+            <span class="tab-icon">&#9881;</span> Roue CSI
+        </div>
+        <div class="main-tab" onclick="switchSection('referentiel')" id="tab-referentiel">
+            <span class="tab-icon">&#9776;</span> Referentiel
+        </div>
+    </div>
+    <div class="breadcrumb" id="breadcrumb"><span class="current">Vue Globale</span></div>
+</div>
+
+<div class="main-layout">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="content">
+
+        <!-- ======= SECTION ROUE ======= -->
+        <div class="section active" id="section-roue">
+            <div class="summary-cards">
+                <div class="summary-card sc-green"><div class="number">12</div><div class="label">Conformes</div></div>
+                <div class="summary-card sc-yellow"><div class="number">18</div><div class="label">En cours</div></div>
+                <div class="summary-card sc-orange"><div class="number">9</div><div class="label">Warning</div></div>
+                <div class="summary-card sc-red"><div class="number">3</div><div class="label">Blocage</div></div>
+                <div class="summary-card sc-grey"><div class="number">7</div><div class="label">Non evalues</div></div>
+            </div>
+            <div class="wheel-area">
+                <svg id="wheel-main" width="440" height="440" viewBox="0 0 440 440"></svg>
+            </div>
+            <div class="hint">Cliquez un indicateur a gauche pour ouvrir sa fiche glissante</div>
+        </div>
+
+        <!-- ======= SECTION REFERENTIEL ======= -->
+        <div class="section" id="section-referentiel">
+            <div class="ref-header">
+                <h2>Referentiel des indicateurs</h2>
+                <div class="subtitle">Design et parametrage de tous les indicateurs du contrat</div>
+            </div>
+            <div class="ref-toolbar">
+                <input type="text" class="search-input" placeholder="Rechercher par code, description..." oninput="filterRef()" id="ref-search">
+                <select class="filter-select" onchange="filterRef()" id="ref-cat-filter">
+                    <option value="all">Toutes les categories</option>
+                    <option value="Process Incident">Process Incident</option>
+                    <option value="SLA Transverse">SLA Transverse</option>
+                    <option value="Service Desk">Service Desk</option>
+                    <option value="Process Demande">Process Demande</option>
+                    <option value="Gestion des stocks">Gestion des stocks</option>
+                    <option value="Marche de location">Marche de location</option>
+                    <option value="Pilotage">Pilotage</option>
+                </select>
+                <select class="filter-select" onchange="filterRef()" id="ref-type-filter">
+                    <option value="all">Tous les types</option>
+                    <option value="SLA">SLA</option>
+                    <option value="KPI">KPI</option>
+                    <option value="XLA">XLA</option>
+                </select>
+                <select class="filter-select" onchange="filterRef()" id="ref-etat-filter">
+                    <option value="all">Tous les etats</option>
+                    <option value="Realise">Realise</option>
+                    <option value="En cours">En cours</option>
+                    <option value="A cadrer">A cadrer</option>
+                </select>
+            </div>
+            <div class="ref-stats" id="ref-stats"></div>
+            <div class="table-area">
+                <table class="ref-table">
+                    <thead><tr>
+                        <th>CSI</th><th>Chap.</th><th>Code</th><th>Description</th><th>Categorie</th><th>Type</th><th>Etat</th><th>Ciblage</th><th>Conformite</th><th></th>
+                    </tr></thead>
+                    <tbody id="ref-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- SLIDE PANEL -->
+<div class="panel-overlay" id="panel-overlay" onclick="closePanel()"></div>
+<div class="slide-panel" id="slide-panel">
+    <div class="slide-panel-header">
+        <h3 id="panel-title">Fiche indicateur</h3>
+        <button class="close-btn" onclick="closePanel()">&times;</button>
+    </div>
+    <div class="panel-body" id="panel-body"></div>
+</div>
+
+<script>
+const COL = {grey:'#6b7280',green:'#22c55e',yellow:'#eab308',orange:'#f97316',red:'#dc2626'};
+const COL_LABELS = {grey:'Non evalue',green:'Valide',yellow:'En cours',orange:'Warning',red:'Blocage'};
+const STEPS = [
+    {label:"Ce qu'on\nVEUT",short:"Ce qu'on VEUT"},{label:"Ce qu'on\nPEUT",short:"Ce qu'on PEUT"},
+    {label:"COLLECTE",short:"COLLECTE"},{label:"DATA\nPREP",short:"DATA PREP"},
+    {label:"DATA\nQUALITY",short:"DATA QUALITY"},{label:"DATA VIZ\n& USAGE",short:"DATA VIZ & USAGE"},
+    {label:"BILAN",short:"BILAN"}
+];
+const globalData = ['green','orange','red','yellow','grey','yellow','orange'];
+
+const CATEGORIES = [
+    {name:'SLA Transverse',count:12,worst:'orange'},{name:'Service Desk',count:8,worst:'orange'},
+    {name:'Process Incident',count:10,worst:'red'},{name:'Process Demande',count:7,worst:'yellow'},
+    {name:'Gestion des stocks',count:3,worst:'green'},{name:'Marche de location',count:2,worst:'grey'},
+    {name:'Pilotage',count:7,worst:'yellow'}
+];
+
+const INDICATORS = [
+    {code:'IQ_INC_1',chap:'4.2.1',desc:"Resolution incident 'Bloque'",cat:'Process Incident',type:'SLA',etat:'Realise',ciblage:'Tous les incidents de priorite Bloquant',conformite:'Delai de resolution <= 4h ouvrees',worst:'green'},
+    {code:'IQ_INC_1A',chap:'4.2.1.1',desc:"Resolution 'Bloque' (4h)",cat:'Process Incident',type:'SLA',etat:'Realise',ciblage:'Incidents P1 hors maintenance programmee',conformite:'95% resolus en moins de 4h',worst:'green'},
+    {code:'IQ_INC_2',chap:'4.2.2',desc:"Resolution incident 'Gene'",cat:'Process Incident',type:'SLA',etat:'Realise',ciblage:'Tous les incidents de priorite Gene',conformite:'Delai de resolution <= 12h ouvrees',worst:'green'},
+    {code:'IQ_INC_NON_RES',chap:'4.2.5',desc:'Non-resolution des tickets',cat:'Process Incident',type:'KPI',etat:'En cours',ciblage:'Tickets ouverts depuis plus de 30 jours',conformite:'Taux de non-resolution < 5%',worst:'red'},
+    {code:'IQ_INC_ESCAL',chap:'4.2.6',desc:"Delais et qualite de l'escalade",cat:'Process Incident',type:'SLA',etat:'En cours',ciblage:'Escalades techniques et hierarchiques',conformite:'100% des escalades notifiees sous 1h',worst:'orange'},
+    {code:'IQ_INC_PROP',chap:'4.2.7',desc:'Propositions amelioration',cat:'Process Incident',type:'KPI',etat:'A cadrer',ciblage:'Propositions emises par les equipes',conformite:'Au moins 2 propositions par trimestre',worst:'grey'},
+    {code:'ITR_QUAL_REF_TECH',chap:'4.1.3',desc:'Qualite gestion referentiels techniques',cat:'SLA Transverse',type:'SLA',etat:'En cours',ciblage:'Liste des donnees des referentiels techniques',conformite:"Nombre d'erreurs <= 5",worst:'orange'},
+    {code:'ITR_REP_PROJET_TSD',chap:'4.1.4',desc:'Reporting projet et TSD',cat:'SLA Transverse',type:'SLA',etat:'A cadrer',ciblage:'Rapports mensuels de pilotage',conformite:'Livraison avant le 5 du mois',worst:'yellow'},
+    {code:'ISD_APPEL_DECROCHE',chap:'4.3.1',desc:'Taux appels decroches',cat:'Service Desk',type:'SLA',etat:'Realise',ciblage:'Appels entrants sur la plage horaire',conformite:'Taux decroche >= 95%',worst:'orange'},
+    {code:'IQ_REQ_TRAITEMENT',chap:'4.4.1',desc:'Delai traitement des demandes',cat:'Process Demande',type:'SLA',etat:'En cours',ciblage:'Demandes standard catalogue',conformite:'80% traitees en 5 jours',worst:'yellow'},
+    {code:'IQ_PARC_STOCK',chap:'4.5.1',desc:'Gestion du stock',cat:'Gestion des stocks',type:'KPI',etat:'Realise',ciblage:'Materiel en stock actif',conformite:'Ecart inventaire < 2%',worst:'green'},
+    {code:'IQ_LOC_RESTIT',chap:'4.6.1',desc:'Restitution materiel location',cat:'Marche de location',type:'KPI',etat:'A cadrer',ciblage:'Materiel en fin de contrat de location',conformite:'100% restitue sous 30 jours',worst:'grey'},
+    {code:'IP_TENUE_COMITE',chap:'4.7.1',desc:'Tenue des comites de pilotage',cat:'Pilotage',type:'KPI',etat:'En cours',ciblage:'Comites mensuels et trimestriels',conformite:'100% des comites tenus',worst:'yellow'},
+    {code:'IP_ENVIRON_TRAVAIL',chap:'4.7.2',desc:'Environnement de travail',cat:'Pilotage',type:'XLA',etat:'En cours',ciblage:"Enquete de satisfaction trimestrielle",conformite:'Score >= 7/10',worst:'red'}
+];
+
+// ==================== SVG WHEEL ====================
+const svgNS='http://www.w3.org/2000/svg';
+function mkSvg(t){return document.createElementNS(svgNS,t);}
+function drawWheel(){
+    const svg=document.getElementById('wheel-main'); svg.innerHTML='';
+    const cx=220,cy=220,R=155,rx=48,ry=33,sa=-90;
+    const defs=mkSvg('defs');
+    defs.innerHTML=`<marker id="ah" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#3a7bd5"/></marker>`;
+    svg.appendChild(defs);
+    const pos=[];
+    for(let i=0;i<7;i++){const a=(sa+i*360/7)*Math.PI/180; pos.push({x:cx+R*Math.cos(a),y:cy+R*Math.sin(a)});}
+    for(let i=0;i<7;i++){
+        const a1=(sa+i*360/7+19)*Math.PI/180, a2=(sa+(i+1)*360/7-19)*Math.PI/180;
+        const p=mkSvg('path');
+        p.setAttribute('d',`M${cx+R*Math.cos(a1)} ${cy+R*Math.sin(a1)} A${R} ${R} 0 0 1 ${cx+R*Math.cos(a2)} ${cy+R*Math.sin(a2)}`);
+        p.setAttribute('class','arrow-path'); p.setAttribute('marker-end','url(#ah)'); svg.appendChild(p);
+    }
+    for(let i=0;i<7;i++){
+        const g=mkSvg('g'); g.setAttribute('class','step-ellipse');
+        const el=mkSvg('ellipse');
+        el.setAttribute('cx',pos[i].x);el.setAttribute('cy',pos[i].y);el.setAttribute('rx',rx);el.setAttribute('ry',ry);
+        el.setAttribute('fill',COL[globalData[i]]);el.setAttribute('stroke','rgba(255,255,255,0.12)');el.setAttribute('stroke-width','2');
+        g.appendChild(el);
+        const lines=STEPS[i].label.split('\n');
+        const txt=mkSvg('text');txt.setAttribute('class','step-label');
+        txt.setAttribute('x',pos[i].x);txt.setAttribute('y',pos[i].y-(lines.length-1)*7);
+        lines.forEach((l,li)=>{const ts=mkSvg('tspan');ts.setAttribute('x',pos[i].x);ts.setAttribute('dy',li?'14':'0');ts.textContent=l;txt.appendChild(ts);});
+        g.appendChild(txt); svg.appendChild(g);
+    }
+    const ct=mkSvg('text');ct.setAttribute('class','center-title');ct.setAttribute('x',cx);ct.setAttribute('y',cy-8);ct.textContent='VUE GLOBALE';svg.appendChild(ct);
+    const cd=mkSvg('text');cd.setAttribute('class','center-date');cd.setAttribute('x',cx);cd.setAttribute('y',cy+16);cd.textContent='49 indicateurs';svg.appendChild(cd);
+}
+
+// ==================== MAIN SECTION SWITCH ====================
+let currentSection = 'roue';
+function switchSection(section){
+    currentSection = section;
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    document.getElementById('section-'+section).classList.add('active');
+    document.querySelectorAll('.main-tab').forEach(t=>t.classList.remove('active'));
+    document.getElementById('tab-'+section).classList.add('active');
+    buildSidebar();
+    if(section==='referentiel'){ buildRefTable(); updateRefStats(); }
+}
+
+// ==================== REFERENTIEL TABLE ====================
+function getFiltered(){
+    const search = document.getElementById('ref-search').value.toLowerCase();
+    const cat = document.getElementById('ref-cat-filter').value;
+    const type = document.getElementById('ref-type-filter').value;
+    const etat = document.getElementById('ref-etat-filter').value;
+    return INDICATORS.filter(ind=>{
+        if(cat!=='all' && ind.cat!==cat) return false;
+        if(type!=='all' && ind.type!==type) return false;
+        if(etat!=='all' && ind.etat!==etat) return false;
+        if(search && !ind.code.toLowerCase().includes(search) && !ind.desc.toLowerCase().includes(search) && !ind.ciblage.toLowerCase().includes(search)) return false;
+        return true;
+    });
+}
+
+function buildRefTable(){
+    const body=document.getElementById('ref-table-body'); body.innerHTML='';
+    const filtered = getFiltered();
+    filtered.forEach(ind=>{
+        const tr=document.createElement('tr');
+        const typeClass = ind.type==='SLA'?'type-sla':ind.type==='KPI'?'type-kpi':'type-xla';
+        const etatClass = ind.etat==='Realise'?'etat-realise':ind.etat==='En cours'?'etat-encours':ind.etat==='A cadrer'?'etat-acadrer':'etat-attente';
+        tr.innerHTML=`
+            <td><span class="status-dot" style="background:${COL[ind.worst]}"></span></td>
+            <td style="color:#888;font-size:11px;white-space:nowrap">${ind.chap}</td>
+            <td style="font-weight:600;white-space:nowrap">${ind.code}</td>
+            <td>${ind.desc}</td>
+            <td style="color:#888;font-size:11px">${ind.cat}</td>
+            <td><span class="type-badge ${typeClass}">${ind.type}</span></td>
+            <td><span class="etat-badge ${etatClass}">${ind.etat}</span></td>
+            <td style="font-size:11px;color:#999;max-width:160px" title="${ind.ciblage}">${ind.ciblage.length>30?ind.ciblage.substring(0,28)+'...':ind.ciblage}</td>
+            <td style="font-size:11px;color:#999;max-width:160px" title="${ind.conformite}">${ind.conformite.length>30?ind.conformite.substring(0,28)+'...':ind.conformite}</td>
+            <td><span class="roue-link" onclick="event.stopPropagation();goToRoue('${ind.code}')">Voir roue</span></td>
+        `;
+        tr.onclick=()=>openPanel(ind.code);
+        body.appendChild(tr);
+    });
+}
+
+function updateRefStats(){
+    const filtered = getFiltered();
+    const counts = {green:0,yellow:0,orange:0,red:0,grey:0};
+    filtered.forEach(ind=>counts[ind.worst]++);
+    const el = document.getElementById('ref-stats');
+    el.innerHTML = `
+        <span class="ref-stat"><span class="dot" style="background:${COL.green}"></span><span class="n">${counts.green}</span> Conformes</span>
+        <span class="ref-stat"><span class="dot" style="background:${COL.yellow}"></span><span class="n">${counts.yellow}</span> En cours</span>
+        <span class="ref-stat"><span class="dot" style="background:${COL.orange}"></span><span class="n">${counts.orange}</span> Warning</span>
+        <span class="ref-stat"><span class="dot" style="background:${COL.red}"></span><span class="n">${counts.red}</span> Blocage</span>
+        <span class="ref-stat"><span class="dot" style="background:${COL.grey}"></span><span class="n">${counts.grey}</span> Non eval.</span>
+        <span class="ref-stat" style="margin-left:auto;color:#a0c4ff;font-weight:600">${filtered.length} / ${INDICATORS.length} indicateurs</span>
+    `;
+}
+
+function filterRef(){
+    buildRefTable();
+    updateRefStats();
+}
+
+function goToRoue(code){
+    switchSection('roue');
+    openPanel(code);
+}
+
+// ==================== SIDEBAR ====================
+function buildSidebar(){
+    const sb=document.getElementById('sidebar'); let h='';
+    if(currentSection==='roue'){
+        h+='<div class="sidebar-section"><h4>Categories</h4>';
+        CATEGORIES.forEach(c=>{
+            h+=`<div class="sidebar-item" title="${c.name} - ${c.count} indicateurs"><span class="sidebar-dot" style="background:${COL[c.worst]}"></span><span>${c.name}</span><span class="sidebar-count">${c.count}</span></div>`;
+        });
+        h+='</div><div class="sidebar-divider"></div><div class="sidebar-section"><h4>Indicateurs <span style="color:#444;font-style:italic;text-transform:none;letter-spacing:0">(clic = fiche)</span></h4>';
+        INDICATORS.forEach(ind=>{
+            h+=`<div class="sidebar-item" onclick="openPanel('${ind.code}')" title="${ind.code} : ${ind.desc}"><span class="sidebar-dot" style="background:${COL[ind.worst]}"></span><span>${ind.code}</span></div>`;
+        });
+        h+='</div>';
+    } else {
+        h+='<div class="sidebar-section"><h4>Filtres rapides</h4>';
+        h+='<div class="sidebar-item active" onclick="quickFilter(\'all\')"><span style="color:#888">Tous les indicateurs</span><span class="sidebar-count">'+INDICATORS.length+'</span></div>';
+        CATEGORIES.forEach(c=>{
+            const n = INDICATORS.filter(i=>i.cat===c.name).length;
+            h+=`<div class="sidebar-item" onclick="quickFilter('${c.name}')"><span class="sidebar-dot" style="background:${COL[c.worst]}"></span><span>${c.name}</span><span class="sidebar-count">${n}</span></div>`;
+        });
+        h+='</div><div class="sidebar-divider"></div><div class="sidebar-section"><h4>Par etat</h4>';
+        ['Realise','En cours','A cadrer'].forEach(etat=>{
+            const n = INDICATORS.filter(i=>i.etat===etat).length;
+            h+=`<div class="sidebar-item" onclick="quickFilterEtat('${etat}')"><span>${etat}</span><span class="sidebar-count">${n}</span></div>`;
+        });
+        h+='</div>';
+    }
+    sb.innerHTML=h;
+}
+
+function quickFilter(cat){
+    document.getElementById('ref-cat-filter').value = cat;
+    filterRef();
+    // update sidebar active
+    document.querySelectorAll('.sidebar-item').forEach(i=>i.classList.remove('active'));
+    event.target.closest('.sidebar-item').classList.add('active');
+}
+function quickFilterEtat(etat){
+    document.getElementById('ref-etat-filter').value = etat;
+    filterRef();
+}
+
+// ==================== SLIDE PANEL ====================
+function openPanel(code){
+    const ind = INDICATORS.find(i=>i.code===code);
+    if(!ind) return;
+    document.getElementById('panel-title').textContent = ind.code;
+    const typeClass = ind.type==='SLA'?'type-sla':ind.type==='KPI'?'type-kpi':'type-xla';
+    const etatClass = ind.etat==='Realise'?'etat-realise':ind.etat==='En cours'?'etat-encours':ind.etat==='A cadrer'?'etat-acadrer':'etat-attente';
+    document.getElementById('panel-body').innerHTML=`
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+            <span class="status-dot" style="background:${COL[ind.worst]};width:14px;height:14px"></span>
+            <span style="font-size:14px;font-weight:600">${ind.desc}</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:18px">
+            <span class="type-badge ${typeClass}" style="font-size:12px;padding:3px 12px">${ind.type}</span>
+            <span class="etat-badge ${etatClass}" style="font-size:12px;padding:3px 12px">${ind.etat}</span>
+            <span style="font-size:12px;padding:3px 12px;background:#16213e;border-radius:8px;color:#888">CSI: <span style="color:${COL[ind.worst]}">${COL_LABELS[ind.worst]}</span></span>
+        </div>
+        <div class="panel-field"><label>Code</label><div class="value">${ind.code}</div></div>
+        <div class="panel-field"><label>Chapitre</label><div class="value">${ind.chap}</div></div>
+        <div class="panel-field"><label>Categorie</label><div class="value">${ind.cat}</div></div>
+        <div class="panel-field"><label>Condition de ciblage</label><div class="value highlight">${ind.ciblage}</div></div>
+        <div class="panel-field"><label>Condition de conformite</label><div class="value highlight">${ind.conformite}</div></div>
+        <div class="panel-nav">
+            <span class="panel-nav-link primary" onclick="switchSection('roue');closePanel();alert('Navigation vers la roue de ${ind.code}')">Voir la roue</span>
+            <span class="panel-nav-link secondary" onclick="switchSection('referentiel');closePanel()">Voir dans le referentiel</span>
+        </div>
+    `;
+    document.getElementById('slide-panel').classList.add('open');
+    document.getElementById('panel-overlay').classList.add('open');
+}
+function closePanel(){
+    document.getElementById('slide-panel').classList.remove('open');
+    document.getElementById('panel-overlay').classList.remove('open');
+}
+
+// ==================== INIT ====================
+drawWheel();
+buildSidebar();
+buildRefTable();
+updateRefStats();
+</script>
+</body>
+</html>
