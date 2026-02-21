@@ -26,6 +26,10 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 17. Heritage couleurs : la couche globale se propage sur les vues categorie (worstColor + wheelColors backend)
 18. Modale edition : onglets couche [C]/[G] au-dessus du textarea (style tabs), couleur obligatoire avant commentaire
 19. Kanban : dates de debut et fin previsionnelle sur les actions (schema, migration auto, CRUD, affichage cartes)
+20. Dates membres : date_creation (auto a l'ajout), date_derniere_connexion (auto au login), date_fin previsionnelle (manuelle)
+21. Emails secondaires par membre : connexion transparente via n'importe quel compte O365 (recherche email principal + secondaires)
+22. Accueil : clic sur nom du projet pour l'ouvrir, bouton "Editer" pour modifier les caracteristiques
+23. Migration auto des bases projet a chaque ouverture (init_db dans _activate_project)
 
 **Prochaines etapes** : Historique/snapshots, generation CR, import Excel.
 
@@ -41,19 +45,19 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 | `requirements.txt` | Dependances Python (flask) |
 | **`app/`** | **Code source Python (Flask)** |
 | `app/main.py` | Point d'entree Flask (app factory + ouverture navigateur auto) |
-| `app/database/schema.sql` | Schema SQLite complet (12 tables, colonnes email/trigramme sur utilisateurs, dates debut/fin sur actions) |
+| `app/database/schema.sql` | Schema SQLite complet (12 tables, colonnes email/trigramme/emails_secondaires/dates sur utilisateurs, dates debut/fin sur actions) |
 | `app/database/seed.sql` | Donnees de reference initiales (etapes, statuts, etats, types) |
 | `app/database/seed_demo.sql` | Donnees de demonstration (categories, indicateurs, actions, utilisateurs) |
-| `app/database/db.py` | init_db(), get_connection(), migration auto, create_project(), attach_project() |
+| `app/database/db.py` | init_db(), get_connection(), migration auto (colonnes + roles), create_project(), attach_project(), update_project(), delete_project() |
 | `app/routes/main.py` | Blueprint principal : login, vues, API step/actions/users, gestion projets |
-| `app/services/identity_service.py` | Detection identite O365 multi-comptes, trigramme, placeholder user, fusion |
+| `app/services/identity_service.py` | Detection identite O365 multi-comptes, trigramme, placeholder user, fusion, reconnaissance emails secondaires |
 | `app/services/action_service.py` | CRUD actions Kanban, regroupement par statut |
-| `app/services/member_service.py` | CRUD membres projet (ajout, role, retrait avec gardes) |
+| `app/services/member_service.py` | CRUD membres projet (ajout, role, retrait avec gardes, emails secondaires, date_fin) |
 | `app/services/indicateur_service.py` | Donnees roue (3 niveaux), save_step, referentiel |
 | `app/templates/` | Templates Jinja2 : base, login, accueil, global, categorie, indicateur, kanban, referentiel, membres |
 | `app/static/js/wheel.js` | Composant SVG roue (drawSimpleWheel + drawIndicatorWheel avec bulles commentaires, bouton "+"), modale edition statuts/commentaires |
 | `app/static/js/kanban.js` | Kanban drag & drop + autocomplete assignee |
-| `app/static/js/membres.js` | CRUD membres, copie invitation, auto-trigramme |
+| `app/static/js/membres.js` | CRUD membres, copie invitation, auto-trigramme, emails secondaires, date_fin |
 | `app/static/css/style.css` | Theme sombre complet |
 | **`data/`** | **Donnees utilisateur (hors git)** |
 | `data/projects.json` | Liste des projets (locaux et distants) |
@@ -77,8 +81,9 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 - **Echanges multi-utilisateurs** : Pattern inbox/outbox JSON via OneDrive
 - **Notifications** : Power Automate (l'utilisateur aura besoin d'accompagnement)
 - **Compteurs** : Inline dans la barre de titre (pastilles compactes)
-- **Identification** : Auto-detection O365 depuis registre Windows (multi-comptes : selection si plusieurs). Formulaire manuel uniquement si detection impossible. Identite verrouillee sur le compte Windows (pas de saisie libre d'email)
+- **Identification** : Auto-detection O365 depuis registre Windows (multi-comptes : selection si plusieurs). Formulaire manuel uniquement si detection impossible. Identite verrouillee sur le compte Windows (pas de saisie libre d'email). Emails secondaires : un membre peut avoir plusieurs adresses O365, connexion transparente via n'importe laquelle
 - **Roles** : 4 niveaux — admin (tout + gestion membres), membre (consulter + modifier), lecteur (consulter uniquement), information (pas d'acces app, destinataire CR uniquement). Createur d'un projet = admin automatique
+- **Migration auto** : init_db applique les migrations (ajout colonnes, reconstruction table) a chaque ouverture de projet, garantissant la compatibilite des bases anciennes
 
 ## Concepts metier essentiels
 
@@ -103,6 +108,8 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 - [x] Gestion membres : 4 roles (admin/membre/lecteur/information), controle d'acces, page admin, invitation
 - [x] Bulles commentaires sur roues globale/categorie + edition directe (clic bulle / bouton "+")
 - [x] Heritage couleurs global → categorie, modale avec onglets couche au-dessus du textarea
+- [x] Dates membres (creation, derniere connexion, fin previsionnelle) + emails secondaires O365
+- [x] Edition projet depuis l'accueil (renommer, retirer) + migration auto des bases a l'ouverture
 - [ ] Historique et enregistrement global (snapshots)
 - [ ] Generation du CR (compte-rendu diff)
 - [ ] Notifications Power Automate
