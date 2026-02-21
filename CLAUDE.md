@@ -6,7 +6,7 @@ Application web Python (Flask + PostgreSQL) pour le suivi de la maturite des ind
 
 ## Etat d'avancement
 
-**Phase actuelle : Authentification implementee** - Application fonctionnelle :
+**Phase actuelle : Dockerisation implementee** - Application fonctionnelle :
 1. Analyse du fichier Excel original (`Roue CSI.xlsm` + `Roue CSI.accdb`)
 2. Concepts metier et architecture definis
 3. Prototypes HTML interactifs valides
@@ -32,8 +32,9 @@ Application web Python (Flask + PostgreSQL) pour le suivi de la maturite des ind
 23. Migration auto des schemas client a chaque activation projet (idempotente, cachee par `_migrated_schemas`)
 24. **Migration SQLite → PostgreSQL** : toute la couche donnees reecrite (db.py, 4 services, routes, templates accueil/membres)
 25. **Authentification** : login email+mdp (werkzeug PBKDF2), setup wizard, invitations par lien (token 7j), SSO Microsoft (MSAL conditionnel), suppression detection registre Windows/identity.json
+26. **Dockerisation** : Dockerfile (python:3.11-slim + gunicorn), docker-compose (app + PostgreSQL 16), .dockerignore
 
-**Prochaines etapes** : Docker, deploiement VPS, historique/snapshots, generation CR.
+**Prochaines etapes** : deploiement VPS, historique/snapshots, generation CR.
 
 ## Architecture PostgreSQL
 
@@ -77,6 +78,9 @@ Application web Python (Flask + PostgreSQL) pour le suivi de la maturite des ind
 | `ROADMAP.md` | Documentation complete du projet : concepts, fonctionnalites, architecture, decisions |
 | `CLAUDE.md` | Ce fichier - contexte pour Claude Code |
 | `start.py` | Script de lancement : demarre Flask + ouvre le navigateur (detection port, reloader-safe, compatible pythonw) |
+| `Dockerfile` | Image Docker de l'app Flask (python:3.11-slim + gunicorn, 2 workers) |
+| `docker-compose.yml` | Orchestration app Flask + PostgreSQL 16, volumes persistants, healthcheck |
+| `.dockerignore` | Exclut .git, .env, data/, _old_version/, prototype/, etc. de l'image Docker |
 | `Roue CSI.vbs` | Lanceur silencieux (pas de fenetre console) — appelle pythonw + start.py |
 | `installer-raccourci.bat` | Cree un raccourci bureau "Roue CSI" — a executer une fois par utilisateur |
 | `requirements.txt` | Dependances Python (flask, psycopg[binary], python-dotenv) |
@@ -168,7 +172,7 @@ Application web Python (Flask + PostgreSQL) pour le suivi de la maturite des ind
 - [x] Edition client/projet depuis l'accueil + migration auto schemas
 - [x] **Migration SQLite → PostgreSQL** (db.py, 4 services, routes, templates)
 - [x] Authentification (login email+mdp, invitations par lien, setup wizard, SSO Microsoft prepare)
-- [ ] Dockerisation (Dockerfile + docker-compose)
+- [x] Dockerisation (Dockerfile + docker-compose + gunicorn)
 - [ ] Deploiement VPS
 - [ ] Historique et enregistrement global (snapshots)
 - [ ] Generation du CR (compte-rendu diff)
