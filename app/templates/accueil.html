@@ -25,11 +25,12 @@
     <p class="accueil-subtitle">Selectionnez un projet</p>
     <div class="project-cards">
         {% for p in projects %}
-        <a class="project-card" href="{{ url_for('main.select_project', project_id=p.id) }}">
-            <div class="project-card-name">{{ p.name }}</div>
+        <div class="project-card">
+            <a class="project-card-name" href="{{ url_for('main.select_project', project_id=p.id) }}">{{ p.name }}</a>
             <div class="project-card-file">{{ p.db_path if p.db_path else p.db_file }}</div>
-            <div class="project-card-btn">Ouvrir</div>
-        </a>
+            <button type="button" class="project-card-btn project-card-btn-edit"
+                    onclick="event.stopPropagation(); showEditDialog('{{ p.id }}', '{{ p.name }}', '{{ p.db_path if p.db_path else '' }}')">Editer</button>
+        </div>
         {% endfor %}
 
         <!-- Carte creation -->
@@ -81,11 +82,61 @@
     </form>
 </div>
 
+<!-- Dialog modification projet -->
+<div class="new-project-overlay" id="edit-project-dialog" onclick="if(event.target===this)this.style.display='none'">
+    <form class="login-form" id="edit-project-form" method="POST">
+        <h3 style="color:#fff;margin-bottom:14px;font-size:16px">Modifier le projet</h3>
+        <div class="login-field">
+            <label for="edit-name">Nom du projet</label>
+            <input type="text" id="edit-name" name="name" required>
+        </div>
+        <div class="login-field" id="edit-path-field" style="display:none">
+            <label for="edit-path">Chemin .db</label>
+            <input type="text" id="edit-path" readonly style="color:#555;cursor:default">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+            <form id="edit-delete-form" method="POST" style="margin:0">
+                <button type="button" class="btn-clear" id="edit-delete-btn" onclick="confirmDelete()">Retirer</button>
+            </form>
+            <span style="flex:1"></span>
+            <button type="button" class="btn btn-secondary" onclick="this.closest('.new-project-overlay').style.display='none'">Annuler</button>
+            <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+    </form>
+</div>
+
 <script>
+var _editProjectId = null;
+
 function showDialog(id) {
     document.getElementById(id).style.display = 'flex';
     var input = document.querySelector('#' + id + ' input');
     if (input) setTimeout(function() { input.focus(); }, 100);
+}
+
+function showEditDialog(projectId, name, dbPath) {
+    _editProjectId = projectId;
+    document.getElementById('edit-project-form').action = '/projet/' + projectId + '/modifier';
+    document.getElementById('edit-name').value = name;
+    var pathField = document.getElementById('edit-path-field');
+    if (dbPath) {
+        document.getElementById('edit-path').value = dbPath;
+        pathField.style.display = '';
+    } else {
+        pathField.style.display = 'none';
+    }
+    document.getElementById('edit-project-dialog').style.display = 'flex';
+    setTimeout(function() { document.getElementById('edit-name').focus(); }, 100);
+}
+
+function confirmDelete() {
+    if (!_editProjectId) return;
+    if (!confirm('Retirer ce projet de la liste ?\n(Le fichier de donnees ne sera pas supprime)')) return;
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/projet/' + _editProjectId + '/supprimer';
+    document.body.appendChild(form);
+    form.submit();
 }
 </script>
 

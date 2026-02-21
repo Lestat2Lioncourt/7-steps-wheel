@@ -46,12 +46,16 @@ CREATE TABLE types_indicateur (
 -- --------------------------------------------
 
 CREATE TABLE utilisateurs (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    login       TEXT UNIQUE NOT NULL,
-    nom         TEXT NOT NULL,
-    email       TEXT,
-    trigramme   TEXT,
-    role        TEXT NOT NULL CHECK (role IN ('admin', 'membre', 'lecteur', 'information'))
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    login                   TEXT UNIQUE NOT NULL,
+    nom                     TEXT NOT NULL,
+    email                   TEXT,
+    trigramme               TEXT,
+    role                    TEXT NOT NULL CHECK (role IN ('admin', 'membre', 'lecteur', 'information')),
+    emails_secondaires      TEXT,
+    date_creation           TEXT,
+    date_derniere_connexion TEXT,
+    date_fin                TEXT
 );
 
 CREATE TABLE categories (

@@ -526,22 +526,30 @@ body {
     font-size: 16px;
     font-weight: 700;
     color: #fff;
+    text-decoration: none;
+}
+.project-card-name:hover {
+    color: #a0c4ff;
 }
 .project-card-file {
     font-size: 11px;
     color: #555;
 }
-.project-card-btn {
+.project-card-btn-edit {
     margin-top: 8px;
-    padding: 6px 20px;
+    padding: 4px 14px;
     border-radius: 6px;
-    background: #3a7bd5;
-    color: #fff;
-    font-size: 12px;
-    font-weight: 600;
+    background: transparent;
+    border: 1px solid #444;
+    color: #888;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all .15s;
 }
-.project-card:hover .project-card-btn {
-    background: #4a8be5;
+.project-card-btn-edit:hover {
+    background: #1a2744;
+    border-color: #888;
+    color: #ddd;
 }
 
 /* ---- NEW PROJECT ---- */
@@ -867,6 +875,32 @@ body {
     cursor: pointer;
 }
 .role-select:focus { outline: none; border-color: #3a7bd5; }
+
+/* Date fin input (membres) */
+.date-fin-input {
+    background: #0f1a30;
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    color: #e0e0e0;
+    padding: 3px 6px;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+}
+.date-fin-input:focus { outline: none; border-color: #3a7bd5; }
+
+/* Emails secondaires input (membres) */
+.emails-sec-input {
+    background: #0f1a30;
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    color: #e0e0e0;
+    padding: 3px 6px;
+    font-size: 11px;
+    font-family: inherit;
+    width: 180px;
+}
+.emails-sec-input:focus { outline: none; border-color: #3a7bd5; }
 
 /* ---- COLORS ---- */
 .c-none { background: #333; }

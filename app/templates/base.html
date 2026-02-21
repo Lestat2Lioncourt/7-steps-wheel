@@ -10,7 +10,7 @@
 
 <!-- TOPBAR -->
 <div class="topbar">
-    <a href="{{ url_for('main.accueil') }}" style="text-decoration:none"><h1>{{ project_name }}</h1></a>
+    <a href="{{ url_for('main.accueil') }}" style="text-decoration:none"><h1>Accueil</h1></a>
     <div class="main-tabs">
         <a class="main-tab{% if active_tab == 'roue' %} active{% endif %}" href="{{ url_for('main.vue_globale') }}">{{ project_name }}</a>
         <a class="main-tab{% if active_tab == 'referentiel' %} active{% endif %}" href="{{ url_for('main.vue_referentiel') }}">Referentiel</a>

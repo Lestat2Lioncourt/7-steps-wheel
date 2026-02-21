@@ -89,6 +89,35 @@ function copyInvitation() {
     });
 }
 
+function updateEmails(userId, emails) {
+    fetch('/api/membres/' + userId + '/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emails_secondaires: emails })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (!data.ok) {
+            alert(data.error || 'Erreur');
+            location.reload();
+        }
+    });
+}
+
+function updateDateFin(userId, dateFin) {
+    fetch('/api/membres/' + userId + '/date_fin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date_fin: dateFin })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (!data.ok) {
+            alert(data.error || 'Erreur');
+        }
+    });
+}
+
 var _triSuggestTimer = null;
 function suggestTrigramme() {
     clearTimeout(_triSuggestTimer);

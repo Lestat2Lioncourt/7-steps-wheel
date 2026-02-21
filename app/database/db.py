@@ -51,6 +51,40 @@ def get_project_by_id(project_id: str) -> dict | None:
     return None
 
 
+def update_project(project_id: str, name: str = None, db_path: str = None) -> dict | None:
+    """Met a jour le nom et/ou le chemin d'un projet. Retourne le projet mis a jour."""
+    projects = load_projects()
+    updated = None
+    for p in projects:
+        if p["id"] == project_id:
+            if name:
+                p["name"] = name
+            if db_path is not None and "db_path" in p:
+                p["db_path"] = db_path
+            updated = p
+            break
+    if updated:
+        _save_projects(projects)
+    return updated
+
+
+def delete_project(project_id: str) -> bool:
+    """Retire un projet de la liste (ne supprime pas le fichier DB). Retourne True si supprime."""
+    projects = load_projects()
+    new_list = [p for p in projects if p["id"] != project_id]
+    if len(new_list) == len(projects):
+        return False
+    _save_projects(new_list)
+    return True
+
+
+def _save_projects(projects: list[dict]) -> None:
+    """Ecrit la liste des projets dans projects.json."""
+    PROJECTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(PROJECTS_PATH, "w", encoding="utf-8") as f:
+        json.dump({"projects": projects}, f, ensure_ascii=False, indent=2)
+
+
 def get_connection(db_path: str | Path | None = None) -> sqlite3.Connection:
     """Retourne une connexion SQLite avec foreign keys activees.
 
@@ -90,9 +124,9 @@ def init_db(db_path: str | Path = DB_PATH, force: bool = False) -> None:
                 print(f"Donnees demo chargees")
             print(f"Base creee : {db_path}")
         else:
-            # Migration : ajouter les colonnes email/trigramme si absentes
+            # Migration : ajouter les colonnes email/trigramme/dates si absentes
             cols = {row["name"] for row in conn.execute("PRAGMA table_info(utilisateurs)").fetchall()}
-            for col_name in ("email", "trigramme"):
+            for col_name in ("email", "trigramme", "emails_secondaires", "date_creation", "date_derniere_connexion", "date_fin"):
                 if col_name not in cols:
                     try:
                         conn.execute(f"ALTER TABLE utilisateurs ADD COLUMN {col_name} TEXT")
@@ -128,15 +162,21 @@ def init_db(db_path: str | Path = DB_PATH, force: bool = False) -> None:
                     PRAGMA foreign_keys = OFF;
                     DROP TABLE IF EXISTS utilisateurs_new;
                     CREATE TABLE utilisateurs_new (
-                        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                        login       TEXT UNIQUE NOT NULL,
-                        nom         TEXT NOT NULL,
-                        email       TEXT,
-                        trigramme   TEXT,
-                        role        TEXT NOT NULL CHECK (role IN ('admin', 'membre', 'lecteur', 'information'))
+                        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                        login                   TEXT UNIQUE NOT NULL,
+                        nom                     TEXT NOT NULL,
+                        email                   TEXT,
+                        trigramme               TEXT,
+                        role                    TEXT NOT NULL CHECK (role IN ('admin', 'membre', 'lecteur', 'information')),
+                        emails_secondaires      TEXT,
+                        date_creation           TEXT,
+                        date_derniere_connexion TEXT,
+                        date_fin                TEXT
                     );
-                    INSERT INTO utilisateurs_new (id, login, nom, email, trigramme, role)
-                        SELECT id, login, nom, email, trigramme, {role_expr}
+                    INSERT INTO utilisateurs_new (id, login, nom, email, trigramme, role,
+                                                  emails_secondaires, date_creation, date_derniere_connexion, date_fin)
+                        SELECT id, login, nom, email, trigramme, {role_expr},
+                               emails_secondaires, date_creation, date_derniere_connexion, date_fin
                         FROM utilisateurs;
                     DROP TABLE utilisateurs;
                     ALTER TABLE utilisateurs_new RENAME TO utilisateurs;

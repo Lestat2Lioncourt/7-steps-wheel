@@ -193,12 +193,15 @@ def create_placeholder_user(email):
 # -------------------------------------------------------------------
 def ensure_user_in_db(login, nom, email="", trigramme=""):
     """Verifie si l'utilisateur est membre du projet.
-    - Si login existe : UPDATE nom/email/trigramme, retourne le role.
+    - Si login existe : UPDATE nom/email/trigramme + date_derniere_connexion, retourne le role.
     - Si email match un placeholder (login different) : fusion, retourne le role.
+    - Si email match un email secondaire : reconnait l'utilisateur, retourne le role.
     - Si n'existe pas : retourne None (pas d'auto-insert)."""
+    from datetime import datetime
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
     conn = get_connection()
     try:
-        # Fusion placeholder : chercher un utilisateur avec cet email mais un login different
+        # Fusion placeholder : chercher un utilisateur avec cet email principal mais un login different
         if email:
             placeholder = conn.execute(
                 "SELECT login, role FROM utilisateurs WHERE email = ? AND login != ?",
@@ -218,8 +221,8 @@ def ensure_user_in_db(login, nom, email="", trigramme=""):
                 )
                 # Mettre a jour le placeholder lui-meme
                 conn.execute(
-                    "UPDATE utilisateurs SET login = ?, nom = ?, trigramme = ? WHERE email = ? AND login = ?",
-                    (login, nom, trigramme or None, email, old_login),
+                    "UPDATE utilisateurs SET login = ?, nom = ?, trigramme = ?, date_derniere_connexion = ?, date_creation = COALESCE(date_creation, ?) WHERE email = ? AND login = ?",
+                    (login, nom, trigramme or None, now, now, email, old_login),
                 )
                 conn.commit()
                 return role
@@ -230,11 +233,32 @@ def ensure_user_in_db(login, nom, email="", trigramme=""):
         ).fetchone()
         if row:
             conn.execute(
-                "UPDATE utilisateurs SET nom = ?, email = ?, trigramme = ? WHERE login = ?",
-                (nom, email or None, trigramme or None, login),
+                "UPDATE utilisateurs SET nom = ?, email = ?, trigramme = ?, date_derniere_connexion = ?, date_creation = COALESCE(date_creation, ?) WHERE login = ?",
+                (nom, email or None, trigramme or None, now, now, login),
             )
             conn.commit()
             return row["role"]
+
+        # Chercher par email secondaire
+        if email:
+            secondary = conn.execute(
+                "SELECT login, nom, email, trigramme, role FROM utilisateurs WHERE (',' || emails_secondaires || ',') LIKE '%,' || ? || ',%'",
+                (email,),
+            ).fetchone()
+            if secondary:
+                conn.execute(
+                    "UPDATE utilisateurs SET date_derniere_connexion = ?, date_creation = COALESCE(date_creation, ?) WHERE login = ?",
+                    (now, now, secondary["login"]),
+                )
+                conn.commit()
+                # Retourner un dict avec les infos du membre principal
+                return {
+                    "role": secondary["role"],
+                    "login": secondary["login"],
+                    "nom": secondary["nom"],
+                    "email": secondary["email"],
+                    "trigramme": secondary["trigramme"] or "",
+                }
 
         # Pas membre de ce projet
         return None
@@ -244,11 +268,13 @@ def ensure_user_in_db(login, nom, email="", trigramme=""):
 
 def add_user_to_project(login, nom, email="", trigramme="", role="membre"):
     """Insere un utilisateur dans la table utilisateurs du projet actif."""
+    from datetime import datetime
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT INTO utilisateurs (login, nom, email, trigramme, role) VALUES (?, ?, ?, ?, ?)",
-            (login, nom, email or None, trigramme or None, role),
+            "INSERT INTO utilisateurs (login, nom, email, trigramme, role, date_creation, date_derniere_connexion) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (login, nom, email or None, trigramme or None, role, now, now),
         )
         conn.commit()
     finally:

@@ -5,7 +5,7 @@ Blueprint principal : accueil, selection de projet, vues Globale, Categorie, Ind
 from datetime import date
 from functools import wraps
 from flask import Blueprint, render_template, abort, request, jsonify, session, redirect, url_for
-from app.database.db import load_projects, get_project_by_id, set_active_project, get_connection, create_project, attach_project
+from app.database.db import load_projects, get_project_by_id, set_active_project, get_active_db_path, get_connection, create_project, attach_project, update_project, delete_project, init_db
 from app.services.indicateur_service import (
     get_global_data,
     get_categorie_data,
@@ -43,6 +43,8 @@ from app.services.member_service import (
     get_all_members,
     add_member,
     update_member_role,
+    update_member_emails,
+    update_member_date_fin,
     remove_member,
 )
 
@@ -50,11 +52,29 @@ main_bp = Blueprint('main', __name__)
 
 
 def _activate_project(project):
-    """Active un projet (local ou distant)."""
+    """Active un projet (local ou distant) et applique les migrations si necessaire."""
     if project.get('db_path'):
         set_active_project(db_path=project['db_path'])
     else:
         set_active_project(db_file=project['db_file'])
+    # Appliquer les migrations sur la base du projet
+    init_db(get_active_db_path())
+
+
+def _resolve_role(result):
+    """Traite le retour de ensure_user_in_db.
+    Si c'est un dict (connexion via email secondaire), met a jour la session
+    avec les infos du membre principal et retourne le role.
+    Si c'est une string, retourne directement le role."""
+    if result is None:
+        return None
+    if isinstance(result, dict):
+        session['user_login'] = result['login']
+        session['user_nom'] = result['nom']
+        session['user_email'] = result['email'] or ''
+        session['user_trigramme'] = result['trigramme'] or ''
+        return result['role']
+    return result
 
 # Couleurs JS disponibles dans tous les templates
 COL = {
@@ -134,8 +154,8 @@ def require_identity_and_project():
     _activate_project(project)
 
     # 3. Verifier que l'utilisateur est membre du projet
-    role = ensure_user_in_db(session['user_login'], session['user_nom'],
-                             session.get('user_email', ''), session.get('user_trigramme', ''))
+    role = _resolve_role(ensure_user_in_db(session['user_login'], session['user_nom'],
+                             session.get('user_email', ''), session.get('user_trigramme', '')))
     if role is None or role == 'information':
         session.pop('project_id', None)
         session.pop('project_name', None)
@@ -255,8 +275,8 @@ def attach_project_route():
     session['project_id'] = project['id']
     session['project_name'] = project['name']
     # Verifier si deja membre, sinon ajouter comme admin
-    role = ensure_user_in_db(session['user_login'], session['user_nom'],
-                             session.get('user_email', ''), session.get('user_trigramme', ''))
+    role = _resolve_role(ensure_user_in_db(session['user_login'], session['user_nom'],
+                             session.get('user_email', ''), session.get('user_trigramme', '')))
     if role is None:
         add_user_to_project(session['user_login'], session['user_nom'],
                             session.get('user_email', ''), session.get('user_trigramme', ''),
@@ -266,6 +286,25 @@ def attach_project_route():
     return redirect(url_for('main.vue_globale'))
 
 
+@main_bp.route('/projet/<project_id>/modifier', methods=['POST'])
+def update_project_route(project_id):
+    name = request.form.get('name', '').strip()
+    if not name:
+        return redirect(url_for('main.accueil'))
+    update_project(project_id, name=name)
+    return redirect(url_for('main.accueil'))
+
+
+@main_bp.route('/projet/<project_id>/supprimer', methods=['POST'])
+def delete_project_route(project_id):
+    delete_project(project_id)
+    # Si le projet supprime etait le projet actif, nettoyer la session
+    if session.get('project_id') == project_id:
+        session.pop('project_id', None)
+        session.pop('project_name', None)
+    return redirect(url_for('main.accueil'))
+
+
 @main_bp.route('/projet/<project_id>')
 def select_project(project_id):
     project = get_project_by_id(project_id)
@@ -273,8 +312,8 @@ def select_project(project_id):
         abort(404)
     _activate_project(project)
     # Verifier si l'utilisateur est membre
-    role = ensure_user_in_db(session['user_login'], session['user_nom'],
-                             session.get('user_email', ''), session.get('user_trigramme', ''))
+    role = _resolve_role(ensure_user_in_db(session['user_login'], session['user_nom'],
+                             session.get('user_email', ''), session.get('user_trigramme', '')))
     if role is None:
         return redirect(url_for('main.accueil', error='non_membre'))
     session['project_id'] = project['id']
@@ -585,6 +624,25 @@ def api_change_role(id):
         return jsonify({'ok': True})
     except ValueError as e:
         return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+@main_bp.route('/api/membres/<int:id>/emails', methods=['POST'])
+@require_admin
+def api_update_member_emails(id):
+    data = request.get_json(force=True)
+    try:
+        update_member_emails(id, data.get('emails_secondaires', '').strip() or None)
+        return jsonify({'ok': True})
+    except ValueError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+@main_bp.route('/api/membres/<int:id>/date_fin', methods=['POST'])
+@require_admin
+def api_update_member_date_fin(id):
+    data = request.get_json(force=True)
+    update_member_date_fin(id, data.get('date_fin', '').strip() or None)
+    return jsonify({'ok': True})
 
 
 @main_bp.route('/api/membres/<int:id>/remove', methods=['POST'])

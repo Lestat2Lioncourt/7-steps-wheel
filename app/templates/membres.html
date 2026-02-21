@@ -31,7 +31,11 @@
                 <th>Trigramme</th>
                 <th>Nom</th>
                 <th>Email</th>
+                <th>Emails secondaires</th>
                 <th>Role</th>
+                <th>Cree le</th>
+                <th>Derniere connexion</th>
+                <th>Fin prevue</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -48,12 +52,25 @@
                 <td>{{ m.nom }}</td>
                 <td style="color:#888;font-size:11px">{{ m.email or '-' }}</td>
                 <td>
+                    <input type="text" class="emails-sec-input" data-id="{{ m.id }}"
+                           value="{{ m.emails_secondaires or '' }}"
+                           placeholder="email1, email2"
+                           onchange="updateEmails({{ m.id }}, this.value)">
+                </td>
+                <td>
                     <select class="role-select" data-id="{{ m.id }}" onchange="changeRole({{ m.id }}, this.value)">
                         <option value="admin"{% if m.role == 'admin' %} selected{% endif %}>Admin</option>
                         <option value="membre"{% if m.role == 'membre' %} selected{% endif %}>Membre</option>
                         <option value="lecteur"{% if m.role == 'lecteur' %} selected{% endif %}>Lecteur</option>
                         <option value="information"{% if m.role == 'information' %} selected{% endif %}>Information</option>
                     </select>
+                </td>
+                <td style="color:#888;font-size:11px;white-space:nowrap">{{ m.date_creation or '-' }}</td>
+                <td style="color:#888;font-size:11px;white-space:nowrap">{{ m.date_derniere_connexion or '-' }}</td>
+                <td>
+                    <input type="date" class="date-fin-input" data-id="{{ m.id }}"
+                           value="{{ m.date_fin or '' }}"
+                           onchange="updateDateFin({{ m.id }}, this.value)">
                 </td>
                 <td>
                     {% if m.login != session.get('user_login') %}
