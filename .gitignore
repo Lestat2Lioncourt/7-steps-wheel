@@ -16,6 +16,7 @@ data/*.db
 
 # Registre projets (local a chaque utilisateur)
 data/projects.json
+data/identity.json
 
 # Cle secrete Flask (generee automatiquement)
 data/.secret_key

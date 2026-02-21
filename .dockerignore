@@ -1,0 +1,17 @@
+.git
+.env
+__pycache__
+venv
+.venv
+data/
+_old_version/
+prototype/
+.claude
+.vscode
+.idea
+*.egg-info
+dist
+build
+Thumbs.db
+Desktop.ini
+.DS_Store
