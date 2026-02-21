@@ -481,9 +481,10 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    height: 100vh;
+    padding: 40px 24px;
+    min-height: 100vh;
     gap: 16px;
+    overflow-y: auto;
 }
 .accueil-title {
     font-size: 28px;
@@ -559,6 +560,41 @@ body {
     justify-content: center;
 }
 .new-project-card:hover { border-color: #3a7bd5; }
+
+/* ---- CLIENT SECTIONS (accueil) ---- */
+.client-section {
+    width: 100%;
+    max-width: 900px;
+    margin-top: 20px;
+}
+.client-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-left: 4px;
+}
+.client-name {
+    font-size: 16px;
+    color: #a78bfa;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+.client-edit-btn {
+    background: none;
+    border: none;
+    color: #555;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all .15s;
+}
+.client-edit-btn:hover {
+    color: #a78bfa;
+    background: rgba(167,139,250,.1);
+}
+
 .new-project-overlay {
     display: none;
     position: fixed;
@@ -741,6 +777,52 @@ body {
 }
 .kanban-new-btn:hover { background: #4a8be5; }
 
+/* Carte chapeau (parent) */
+.kanban-card.chapeau-card {
+    border-left: 3px double #a78bfa;
+    background: #0f1a30;
+    cursor: pointer;
+}
+.kanban-card.chapeau-card:hover {
+    border-left-color: #c4b5fd;
+}
+.chapeau-count {
+    display: inline-block;
+    font-size: 9px;
+    background: #a78bfa30;
+    color: #a78bfa;
+    padding: 1px 7px;
+    border-radius: 3px;
+    margin-top: 4px;
+    font-weight: 600;
+}
+
+/* Parent breadcrumb (drill-down) */
+.parent-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px 0;
+    font-size: 12px;
+    flex-wrap: wrap;
+}
+.parent-back {
+    color: #a0c4ff;
+    text-decoration: none;
+    font-weight: 600;
+}
+.parent-back:hover { text-decoration: underline; }
+.parent-breadcrumb-sep { color: #555; }
+.parent-crumb-link {
+    color: #a0c4ff;
+    text-decoration: none;
+}
+.parent-crumb-link:hover { text-decoration: underline; }
+.parent-crumb-current {
+    color: #fff;
+    font-weight: 600;
+}
+
 /* Kanban border-left par statut */
 .kanban-column[data-status="a_faire"] .kanban-card:not(.cat-card) { border-left-color: #3a7bd5; }
 .kanban-column[data-status="en_cours"] .kanban-card:not(.cat-card) { border-left-color: #eab308; }
@@ -901,6 +983,89 @@ body {
     width: 180px;
 }
 .emails-sec-input:focus { outline: none; border-color: #3a7bd5; }
+
+/* ---- MEMBER DETAIL MODAL ---- */
+.member-detail-field {
+    margin-bottom: 12px;
+}
+.member-detail-field label {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #888;
+    margin-bottom: 4px;
+}
+.member-detail-field input,
+.member-detail-field select {
+    width: 100%;
+    background: #0f1a30;
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    color: #e0e0e0;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-family: inherit;
+}
+.member-detail-field input:focus,
+.member-detail-field select:focus {
+    outline: none;
+    border-color: #3a7bd5;
+}
+.member-detail-field input[readonly],
+.member-detail-field select[disabled] {
+    background: #0a1020;
+    color: #666;
+    cursor: default;
+    border-color: #1a1a3a;
+}
+.member-detail-field .field-value {
+    font-size: 12px;
+    color: #888;
+    padding: 8px 10px;
+    background: #0a1020;
+    border-radius: 6px;
+    border: 1px solid #1a1a3a;
+}
+.member-detail-row {
+    display: flex;
+    gap: 12px;
+}
+.member-detail-row .member-detail-field {
+    flex: 1;
+}
+
+/* ---- SWITCH ROLE BUTTON ---- */
+.switch-role-btn {
+    padding: 4px 12px;
+    border-radius: 5px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid #a78bfa;
+    background: transparent;
+    color: #a78bfa;
+    transition: all .15s;
+    white-space: nowrap;
+}
+.switch-role-btn:hover {
+    background: rgba(167,139,250,.15);
+    border-color: #c4b5fd;
+    color: #c4b5fd;
+}
+
+/* Role text badge in table */
+.role-text-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+}
+.role-text-badge.role-admin { background: #0f346040; color: #a0c4ff; }
+.role-text-badge.role-membre { background: #1a302040; color: #66bb6a; }
+.role-text-badge.role-lecteur { background: #302a1040; color: #eab308; }
+.role-text-badge.role-information { background: #2a201040; color: #ffc107; }
 
 /* ---- COLORS ---- */
 .c-none { background: #333; }

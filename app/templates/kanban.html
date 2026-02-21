@@ -87,6 +87,32 @@
 {% endblock %}
 
 {% block content %}
+{% if parent_breadcrumb %}
+<div class="parent-breadcrumb">
+    {% if kanban_level == 'global' %}
+    <a class="parent-back" href="{{ url_for('main.vue_kanban_global') }}{% if parent_breadcrumb|length > 1 %}?parent={{ parent_breadcrumb[-2].id }}{% endif %}">&larr; Retour</a>
+    {% elif kanban_level == 'categorie' %}
+    <a class="parent-back" href="{{ url_for('main.vue_kanban_categorie', id=data.categorie.id) }}{% if parent_breadcrumb|length > 1 %}?parent={{ parent_breadcrumb[-2].id }}{% endif %}">&larr; Retour</a>
+    {% else %}
+    <a class="parent-back" href="{{ url_for('main.vue_kanban', id=data.indicateur.id) }}{% if parent_breadcrumb|length > 1 %}?parent={{ parent_breadcrumb[-2].id }}{% endif %}">&larr; Retour</a>
+    {% endif %}
+    <span class="parent-breadcrumb-sep">|</span>
+    {% for crumb in parent_breadcrumb %}
+    {% if not loop.last %}
+    {% if kanban_level == 'global' %}
+    <a class="parent-crumb-link" href="{{ url_for('main.vue_kanban_global') }}?parent={{ crumb.id }}">{{ crumb.titre }}</a>
+    {% elif kanban_level == 'categorie' %}
+    <a class="parent-crumb-link" href="{{ url_for('main.vue_kanban_categorie', id=data.categorie.id) }}?parent={{ crumb.id }}">{{ crumb.titre }}</a>
+    {% else %}
+    <a class="parent-crumb-link" href="{{ url_for('main.vue_kanban', id=data.indicateur.id) }}?parent={{ crumb.id }}">{{ crumb.titre }}</a>
+    {% endif %}
+    <span class="parent-breadcrumb-sep">&rsaquo;</span>
+    {% else %}
+    <span class="parent-crumb-current">{{ crumb.titre }}</span>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
 <div class="view-header">
     <div>
         {% if kanban_level == 'global' %}
@@ -101,7 +127,7 @@
         {% endif %}
     </div>
     {% if session.get('user_role') != 'lecteur' %}
-    <button class="kanban-new-btn" onclick="openActionModal(null)">+ Nouvelle action</button>
+    <button class="kanban-new-btn" onclick="openActionModal(null)">+ {% if parent_id %}Nouvelle sous-tache{% else %}Nouvelle action{% endif %}</button>
     {% endif %}
 </div>
 <div class="kanban-area">
@@ -112,7 +138,8 @@
             <h4>{{ kanban_labels[status] }} <span class="kcount">{{ actions_list|length }}</span></h4>
             <div class="kanban-cards">
                 {% for a in actions_list %}
-                <div class="kanban-card{% if a.niveau == 'categorie' %} cat-card{% elif a.niveau == 'global' %} global-card{% endif %}"
+                {% set is_chapeau = a.children_count > 0 %}
+                <div class="kanban-card{% if is_chapeau %} chapeau-card{% endif %}{% if a.niveau == 'categorie' and not is_chapeau %} cat-card{% elif a.niveau == 'global' and not is_chapeau %} global-card{% endif %}"
                      data-id="{{ a.id }}"
                      data-titre="{{ a.titre }}"
                      data-etape="{{ a.etape }}"
@@ -123,19 +150,26 @@
                      data-description="{{ a.description or '' }}"
                      data-date-debut="{{ a.date_debut or '' }}"
                      data-date-fin="{{ a.date_fin or '' }}"
-                     data-niveau="{{ a.niveau }}">
+                     data-niveau="{{ a.niveau }}"
+                     data-children="{{ a.children_count }}"
+                     data-parent-id="{{ a.parent_id or '' }}">
                     <div class="card-title">{{ a.titre }}</div>
                     <div class="card-meta">
                         {% if a.assignee_trigramme %}<span class="card-tri">{{ a.assignee_trigramme }}</span>{% endif %}
                         {{ a.assignee_nom }}
                     </div>
                     <span class="card-step">{{ a.etape_nom }}</span>
-                    {% if a.date_debut or a.date_fin %}
+                    {% set d_debut = a.date_debut_computed if is_chapeau else a.date_debut %}
+                    {% set d_fin = a.date_fin_computed if is_chapeau else a.date_fin %}
+                    {% if d_debut or d_fin %}
                     <div class="card-dates">
-                        {% if a.date_debut %}<span title="Debut">{{ a.date_debut }}</span>{% endif %}
-                        {% if a.date_debut and a.date_fin %}<span class="card-dates-sep">&rarr;</span>{% endif %}
-                        {% if a.date_fin %}<span title="Fin prev.">{{ a.date_fin }}</span>{% endif %}
+                        {% if d_debut %}<span title="Debut">{{ d_debut }}</span>{% endif %}
+                        {% if d_debut and d_fin %}<span class="card-dates-sep">&rarr;</span>{% endif %}
+                        {% if d_fin %}<span title="Fin prev.">{{ d_fin }}</span>{% endif %}
                     </div>
+                    {% endif %}
+                    {% if is_chapeau %}
+                    <span class="chapeau-count">{{ a.children_count }} sous-tache{{ 's' if a.children_count > 1 else '' }}</span>
                     {% endif %}
                     {% if a.niveau == 'categorie' and kanban_level != 'categorie' %}
                     <span class="cat-badge">C {{ a.categorie_nom }}</span>
@@ -236,6 +270,7 @@
 <script>
     window._kanbanLevel = '{{ kanban_level }}';
     window._kanbanUserLogin = '{{ session.get("user_login", "admin") }}';
+    window._kanbanParentId = {{ parent_id|tojson }};
     {% if kanban_level == 'indicateur' %}
     window._kanbanIndicateurId = {{ data.indicateur.id }};
     {% endif %}

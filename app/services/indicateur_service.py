@@ -1,17 +1,13 @@
 """
 Couche service : requetes SQL et logique d'agregation "le pire l'emporte".
+Adapte pour PostgreSQL (psycopg3).
 """
 
-from app.database.db import get_connection
+from app.database.db import get_connection, get_active_project_id
 
 # Mapping severite -> nom de couleur JS
 _SEVERITE_TO_COLOR = {0: 'grey', 1: 'green', 2: 'yellow', 3: 'orange', 4: 'red'}
 _COLOR_TO_SEVERITE = {v: k for k, v in _SEVERITE_TO_COLOR.items()}
-
-
-def _row_to_dict(row):
-    """Convertit un sqlite3.Row en dict."""
-    return dict(row) if row else None
 
 
 def _worst(severities):
@@ -66,27 +62,18 @@ def get_statuts_map():
 # Vue Globale
 # -------------------------------------------------------------------
 def get_global_data():
-    """
-    Retourne les donnees pour la vue globale :
-    - categories : liste de {id, nom, count, worst}
-    - wheel_colors : array de 7 couleurs (pire de tous les indicateurs par etape)
-    - status_counts : {green: N, ...}
-    - total : nombre total d'indicateurs
-    """
     conn = get_connection()
     try:
         statuts = get_statuts_map()
 
-        # Categories avec comptage
         cats = conn.execute("""
             SELECT c.id, c.nom, c.ordre, COUNT(i.id) as count
             FROM categories c
             LEFT JOIN indicateurs i ON i.categorie_id = c.id
-            GROUP BY c.id
+            GROUP BY c.id, c.nom, c.ordre
             ORDER BY c.ordre
         """).fetchall()
 
-        # Toutes les indicateur_etapes avec severites jointes
         ie_rows = conn.execute("""
             SELECT ie.indicateur_id, ie.etape,
                    sg.severite as sev_global,
@@ -98,32 +85,25 @@ def get_global_data():
             LEFT JOIN statuts_etape si ON ie.statut_indicateur_id = si.id
         """).fetchall()
 
-        # Couleur pire par indicateur (sur toutes ses etapes)
-        ind_worst = {}  # indicateur_id -> max severite
-        # Couleur pire par etape (sur tous les indicateurs)
-        step_worst = {}  # etape -> max severite
-        # Couleur pire par indicateur par etape
-        ind_step_color = {}  # (indicateur_id, etape) -> color
+        ind_worst = {}
+        step_worst = {}
+        ind_step_color = {}
 
         for row in ie_rows:
             sev = _step_worst_color_sev(row)
             color = _SEVERITE_TO_COLOR.get(sev, 'grey')
-
             iid = row['indicateur_id']
             step = row['etape']
-
             ind_step_color[(iid, step)] = color
-
             if iid not in ind_worst or sev > ind_worst[iid]:
                 ind_worst[iid] = sev
             if step not in step_worst or sev > step_worst[step]:
                 step_worst[step] = sev
 
-        # Couleur pire par categorie
         indicateurs = conn.execute(
             "SELECT id, categorie_id FROM indicateurs"
         ).fetchall()
-        cat_inds = {}  # categorie_id -> [indicateur_ids]
+        cat_inds = {}
         for ind in indicateurs:
             cat_inds.setdefault(ind['categorie_id'], []).append(ind['id'])
 
@@ -141,13 +121,11 @@ def get_global_data():
                 'worst': _SEVERITE_TO_COLOR.get(worst_sev, 'grey')
             })
 
-        # Wheel : 7 couleurs
         wheel_colors = []
         for step_num in range(1, 8):
             sev = step_worst.get(step_num, 0)
             wheel_colors.append(_SEVERITE_TO_COLOR.get(sev, 'grey'))
 
-        # Compteurs globaux : compter les indicateurs par leur pire couleur
         status_counts = {'green': 0, 'yellow': 0, 'orange': 0, 'red': 0, 'grey': 0}
         for iid, sev in ind_worst.items():
             c = _SEVERITE_TO_COLOR.get(sev, 'grey')
@@ -179,49 +157,37 @@ def _step_worst_color_sev(ie_row):
 # Vue Categorie
 # -------------------------------------------------------------------
 def get_categorie_data(categorie_id):
-    """
-    Retourne les donnees pour la vue categorie :
-    - categorie : {id, nom}
-    - categories : toutes les categories (pour sidebar)
-    - indicateurs : liste de {id, code, description, type, etat, worst}
-    - wheel_colors : 7 couleurs (pire des indicateurs de cette categorie par etape)
-    - status_counts : {green: N, ...}
-    """
     conn = get_connection()
     try:
         statuts = get_statuts_map()
 
         cat = conn.execute(
-            "SELECT id, nom FROM categories WHERE id = ?", (categorie_id,)
+            "SELECT id, nom FROM categories WHERE id = %s", (categorie_id,)
         ).fetchone()
         if not cat:
             return None
 
-        # Toutes les categories (sidebar)
         all_cats_rows = conn.execute("""
             SELECT c.id, c.nom, c.ordre, COUNT(i.id) as count
             FROM categories c
             LEFT JOIN indicateurs i ON i.categorie_id = c.id
-            GROUP BY c.id ORDER BY c.ordre
+            GROUP BY c.id, c.nom, c.ordre ORDER BY c.ordre
         """).fetchall()
 
-        # Indicateurs de la categorie
         inds = conn.execute("""
             SELECT i.id, i.code, i.description, t.intitule as type, e.intitule as etat,
                    t.couleur as type_couleur
             FROM indicateurs i
             JOIN types_indicateur t ON i.type_id = t.id
             JOIN etats_indicateur e ON i.etat_id = e.id
-            WHERE i.categorie_id = ?
+            WHERE i.categorie_id = %s
             ORDER BY i.code
         """, (categorie_id,)).fetchall()
 
         ind_ids = [r['id'] for r in inds]
 
-        # indicateur_etapes pour ces indicateurs
         if ind_ids:
-            placeholders = ','.join('?' * len(ind_ids))
-            ie_rows = conn.execute(f"""
+            ie_rows = conn.execute("""
                 SELECT ie.indicateur_id, ie.etape,
                        sg.severite as sev_global,
                        sc.severite as sev_categorie,
@@ -230,12 +196,11 @@ def get_categorie_data(categorie_id):
                 LEFT JOIN statuts_etape sg ON ie.statut_global_id = sg.id
                 LEFT JOIN statuts_etape sc ON ie.statut_categorie_id = sc.id
                 LEFT JOIN statuts_etape si ON ie.statut_indicateur_id = si.id
-                WHERE ie.indicateur_id IN ({placeholders})
-            """, ind_ids).fetchall()
+                WHERE ie.indicateur_id = ANY(%s)
+            """, (ind_ids,)).fetchall()
         else:
             ie_rows = []
 
-        # Couleur pire par indicateur et par etape
         ind_worst = {}
         step_worst = {}
         for row in ie_rows:
@@ -270,8 +235,7 @@ def get_categorie_data(categorie_id):
             c = _SEVERITE_TO_COLOR.get(sev, 'grey')
             status_counts[c] = status_counts.get(c, 0) + 1
 
-        # Calculer worst par categorie (pour sidebar)
-        # On a besoin des indicateur_etapes de toutes les categories
+        # Worst par categorie (sidebar)
         all_ie = conn.execute("""
             SELECT ie.indicateur_id, i.categorie_id,
                    sg.severite as sev_global,
@@ -316,16 +280,6 @@ def get_categorie_data(categorie_id):
 # Vue Indicateur
 # -------------------------------------------------------------------
 def get_indicateur_data(indicateur_id):
-    """
-    Retourne les donnees pour la vue indicateur :
-    - indicateur : proprietes completes
-    - categorie : {id, nom}
-    - step_data : array de 7 objets avec les 3 couches
-    - wheel_colors : 7 couleurs (pire des 3 couches par etape)
-    - status_counts : compteur par couleur sur les 7 etapes
-    - siblings : indicateurs de la meme categorie (pour sidebar)
-    - categories : toutes les categories (pour sidebar)
-    """
     conn = get_connection()
     try:
         statuts = get_statuts_map()
@@ -336,16 +290,15 @@ def get_indicateur_data(indicateur_id):
             FROM indicateurs i
             JOIN types_indicateur t ON i.type_id = t.id
             JOIN etats_indicateur e ON i.etat_id = e.id
-            WHERE i.id = ?
+            WHERE i.id = %s
         """, (indicateur_id,)).fetchone()
         if not ind:
             return None
 
         cat = conn.execute(
-            "SELECT id, nom FROM categories WHERE id = ?", (ind['categorie_id'],)
+            "SELECT id, nom FROM categories WHERE id = %s", (ind['categorie_id'],)
         ).fetchone()
 
-        # 7 etapes de cet indicateur
         ie_rows = conn.execute("""
             SELECT ie.etape,
                    ie.statut_global_id, ie.commentaire_global,
@@ -358,11 +311,10 @@ def get_indicateur_data(indicateur_id):
             LEFT JOIN statuts_etape sg ON ie.statut_global_id = sg.id
             LEFT JOIN statuts_etape sc ON ie.statut_categorie_id = sc.id
             LEFT JOIN statuts_etape si ON ie.statut_indicateur_id = si.id
-            WHERE ie.indicateur_id = ?
+            WHERE ie.indicateur_id = %s
             ORDER BY ie.etape
         """, (indicateur_id,)).fetchall()
 
-        # Construire step_data pour JS (7 objets avec 3 couches)
         step_data = []
         wheel_colors = []
         status_counts = {'green': 0, 'yellow': 0, 'orange': 0, 'red': 0, 'grey': 0}
@@ -403,20 +355,18 @@ def get_indicateur_data(indicateur_id):
             wheel_colors.append(wc)
             status_counts[wc] += 1
 
-        # Indicateurs de la meme categorie (sidebar)
+        # Siblings
         siblings_rows = conn.execute("""
             SELECT i.id, i.code, i.description
             FROM indicateurs i
-            WHERE i.categorie_id = ?
+            WHERE i.categorie_id = %s
             ORDER BY i.code
         """, (ind['categorie_id'],)).fetchall()
 
-        # Calculer worst pour chaque sibling
         sib_ids = [r['id'] for r in siblings_rows]
         sib_worst = {}
         if sib_ids:
-            placeholders = ','.join('?' * len(sib_ids))
-            sib_ie = conn.execute(f"""
+            sib_ie = conn.execute("""
                 SELECT ie.indicateur_id,
                        sg.severite as sev_global,
                        sc.severite as sev_categorie,
@@ -425,8 +375,8 @@ def get_indicateur_data(indicateur_id):
                 LEFT JOIN statuts_etape sg ON ie.statut_global_id = sg.id
                 LEFT JOIN statuts_etape sc ON ie.statut_categorie_id = sc.id
                 LEFT JOIN statuts_etape si ON ie.statut_indicateur_id = si.id
-                WHERE ie.indicateur_id IN ({placeholders})
-            """, sib_ids).fetchall()
+                WHERE ie.indicateur_id = ANY(%s)
+            """, (sib_ids,)).fetchall()
             for r in sib_ie:
                 sev = _step_worst_color_sev(r)
                 iid = r['indicateur_id']
@@ -442,7 +392,7 @@ def get_indicateur_data(indicateur_id):
                 'worst': _SEVERITE_TO_COLOR.get(sib_worst.get(s['id'], 0), 'grey')
             })
 
-        # Toutes categories (sidebar)
+        # All categories (sidebar)
         all_cats_rows = conn.execute("""
             SELECT c.id, c.nom, c.ordre
             FROM categories c ORDER BY c.ordre
@@ -475,7 +425,6 @@ def get_indicateur_data(indicateur_id):
                 'worst': _SEVERITE_TO_COLOR.get(cat_worst.get(c['id'], 0), 'grey')
             })
 
-        # Worst global de l'indicateur
         ind_worst_sev = max(
             (_step_worst_color_sev(r) for r in ie_rows),
             default=0
@@ -512,345 +461,6 @@ def get_indicateur_data(indicateur_id):
 # -------------------------------------------------------------------
 # Compteurs globaux (pour topbar)
 # -------------------------------------------------------------------
-# -------------------------------------------------------------------
-# Drill data pour la vue Globale (clic etape)
-# -------------------------------------------------------------------
-def get_global_drill_data():
-    """
-    Retourne {1: [{cat_id, cat_nom, worst, count}], ...} pour les 7 etapes.
-    Worst par categorie calcule uniquement sur l'etape concernee.
-    """
-    conn = get_connection()
-    try:
-        rows = conn.execute("""
-            SELECT ie.etape, i.categorie_id, c.nom as cat_nom,
-                   sg.severite as sev_global,
-                   sc.severite as sev_categorie,
-                   si.severite as sev_indicateur
-            FROM indicateur_etapes ie
-            JOIN indicateurs i ON ie.indicateur_id = i.id
-            JOIN categories c ON i.categorie_id = c.id
-            LEFT JOIN statuts_etape sg ON ie.statut_global_id = sg.id
-            LEFT JOIN statuts_etape sc ON ie.statut_categorie_id = sc.id
-            LEFT JOIN statuts_etape si ON ie.statut_indicateur_id = si.id
-        """).fetchall()
-
-        result = {}
-        for step_num in range(1, 8):
-            # Group by categorie for this step
-            cat_data = {}  # cat_id -> {cat_nom, worst_sev, count}
-            for r in rows:
-                if r['etape'] != step_num:
-                    continue
-                cid = r['categorie_id']
-                sev = _step_worst_color_sev(r)
-                if cid not in cat_data:
-                    cat_data[cid] = {'cat_nom': r['cat_nom'], 'worst_sev': sev, 'count': 0}
-                cat_data[cid]['count'] += 1
-                if sev > cat_data[cid]['worst_sev']:
-                    cat_data[cid]['worst_sev'] = sev
-
-            result[step_num] = [
-                {
-                    'cat_id': cid,
-                    'cat_nom': d['cat_nom'],
-                    'worst': _SEVERITE_TO_COLOR.get(d['worst_sev'], 'grey'),
-                    'count': d['count']
-                }
-                for cid, d in sorted(cat_data.items())
-            ]
-        return result
-    finally:
-        conn.close()
-
-
-# -------------------------------------------------------------------
-# Drill data pour la vue Categorie (clic etape)
-# -------------------------------------------------------------------
-def get_categorie_drill_data(categorie_id):
-    """
-    Retourne {1: [{ind_id, ind_code, ind_desc, worst}], ...} pour les 7 etapes.
-    """
-    conn = get_connection()
-    try:
-        rows = conn.execute("""
-            SELECT ie.etape, ie.indicateur_id, i.code, i.description,
-                   sg.severite as sev_global,
-                   sc.severite as sev_categorie,
-                   si.severite as sev_indicateur
-            FROM indicateur_etapes ie
-            JOIN indicateurs i ON ie.indicateur_id = i.id
-            LEFT JOIN statuts_etape sg ON ie.statut_global_id = sg.id
-            LEFT JOIN statuts_etape sc ON ie.statut_categorie_id = sc.id
-            LEFT JOIN statuts_etape si ON ie.statut_indicateur_id = si.id
-            WHERE i.categorie_id = ?
-        """, (categorie_id,)).fetchall()
-
-        result = {}
-        for step_num in range(1, 8):
-            step_inds = []
-            for r in rows:
-                if r['etape'] != step_num:
-                    continue
-                sev = _step_worst_color_sev(r)
-                step_inds.append({
-                    'ind_id': r['indicateur_id'],
-                    'ind_code': r['code'],
-                    'ind_desc': r['description'],
-                    'worst': _SEVERITE_TO_COLOR.get(sev, 'grey')
-                })
-            step_inds.sort(key=lambda x: x['ind_code'])
-            result[step_num] = step_inds
-        return result
-    finally:
-        conn.close()
-
-
-# -------------------------------------------------------------------
-# Valeurs couche pour la modale (lecture)
-# -------------------------------------------------------------------
-def get_step_layer_values(etape):
-    """
-    Retourne les valeurs de la couche globale pour cette etape.
-    Lue depuis n'importe quel indicateur (identique pour tous).
-    {color: 'green', comment: '...'}
-    """
-    conn = get_connection()
-    try:
-        row = conn.execute("""
-            SELECT sg.severite as sev, ie.commentaire_global as comment
-            FROM indicateur_etapes ie
-            LEFT JOIN statuts_etape sg ON ie.statut_global_id = sg.id
-            WHERE ie.etape = ?
-            LIMIT 1
-        """, (etape,)).fetchone()
-        if row:
-            return {'color': _SEVERITE_TO_COLOR.get(row['sev'], None) if row['sev'] is not None else None,
-                    'comment': row['comment'] or ''}
-        return {'color': None, 'comment': ''}
-    finally:
-        conn.close()
-
-
-def get_step_layer_values_cat(categorie_id, etape):
-    """
-    Retourne les valeurs de la couche categorie pour cette etape et categorie.
-    {color: 'green', comment: '...'}
-    """
-    conn = get_connection()
-    try:
-        row = conn.execute("""
-            SELECT sc.severite as sev, ie.commentaire_categorie as comment
-            FROM indicateur_etapes ie
-            JOIN indicateurs i ON ie.indicateur_id = i.id
-            LEFT JOIN statuts_etape sc ON ie.statut_categorie_id = sc.id
-            WHERE ie.etape = ? AND i.categorie_id = ?
-            LIMIT 1
-        """, (etape, categorie_id)).fetchone()
-        if row:
-            return {'color': _SEVERITE_TO_COLOR.get(row['sev'], None) if row['sev'] is not None else None,
-                    'comment': row['comment'] or ''}
-        return {'color': None, 'comment': ''}
-    finally:
-        conn.close()
-
-
-# -------------------------------------------------------------------
-# Sauvegarde d'une couche pour une etape
-# -------------------------------------------------------------------
-def save_step(context, etape, layer, color_name, commentaire,
-              indicateur_id=None, categorie_id=None):
-    """
-    Sauvegarde un statut/commentaire pour une couche d'une etape.
-
-    context: 'global' | 'categorie' | 'indicateur'
-    layer: 'global' | 'categorie' | 'indicateur' (quelle couche ecrire)
-    color_name: 'green', 'red', ... ou None pour vider
-    commentaire: texte ou ''
-    """
-    conn = get_connection()
-    try:
-        # Mapping color_name -> statut_id via severite
-        statut_id = None
-        if color_name:
-            sev = _COLOR_TO_SEVERITE.get(color_name)
-            if sev is not None:
-                row = conn.execute(
-                    "SELECT id FROM statuts_etape WHERE severite = ?", (sev,)
-                ).fetchone()
-                if row:
-                    statut_id = row['id']
-
-        # Determine column names
-        statut_col = f'statut_{layer}_id'
-        comment_col = f'commentaire_{layer}'
-
-        if context == 'global':
-            # Propage a tous les indicateurs
-            conn.execute(f"""
-                UPDATE indicateur_etapes
-                SET {statut_col} = ?, {comment_col} = ?
-                WHERE etape = ?
-            """, (statut_id, commentaire or None, etape))
-
-        elif context == 'categorie':
-            # Deriver categorie_id depuis indicateur_id si manquant
-            if not categorie_id and indicateur_id:
-                row = conn.execute(
-                    "SELECT categorie_id FROM indicateurs WHERE id = ?", (indicateur_id,)
-                ).fetchone()
-                if row:
-                    categorie_id = row['categorie_id']
-            # Propage aux indicateurs de la categorie
-            conn.execute(f"""
-                UPDATE indicateur_etapes
-                SET {statut_col} = ?, {comment_col} = ?
-                WHERE etape = ? AND indicateur_id IN (
-                    SELECT id FROM indicateurs WHERE categorie_id = ?
-                )
-            """, (statut_id, commentaire or None, etape, categorie_id))
-
-        elif context == 'indicateur':
-            # Ne touche que cet indicateur
-            conn.execute(f"""
-                UPDATE indicateur_etapes
-                SET {statut_col} = ?, {comment_col} = ?
-                WHERE etape = ? AND indicateur_id = ?
-            """, (statut_id, commentaire or None, etape, indicateur_id))
-
-        conn.commit()
-    finally:
-        conn.close()
-
-
-# -------------------------------------------------------------------
-# Vue Referentiel
-# -------------------------------------------------------------------
-
-# Mappings pour les classes CSS des types et etats
-_TYPE_CLASS = {'SLA': 'type-sla', 'KPI': 'type-kpi', 'XLA': 'type-xla'}
-_ETAT_CLASS = {
-    'Réalisé': 'etat-realise', 'En cours': 'etat-encours',
-    'À cadrer': 'etat-acadrer', 'Cadré': 'etat-cadre',
-    'En attente': 'etat-enattente', 'Annulé': 'etat-annule',
-}
-
-
-def get_referentiel_data():
-    """
-    Retourne les donnees pour la vue referentiel :
-    - categories : [{id, nom, count, worst}]
-    - indicateurs : [{id, code, description, chapitre, categorie_nom, type, etat,
-                      etat_class, type_class, ciblage, conformite, worst}]
-    - etats : [{intitule}]
-    - types : [{intitule}]
-    - status_counts : {green: N, ...}
-    - total : nombre total d'indicateurs
-    """
-    conn = get_connection()
-    try:
-        # Indicateurs joints avec categories, types, etats
-        inds = conn.execute("""
-            SELECT i.id, i.code, i.description, i.chapitre, i.ciblage, i.conformite,
-                   i.categorie_id, c.nom as categorie_nom,
-                   t.intitule as type, e.intitule as etat
-            FROM indicateurs i
-            JOIN categories c ON i.categorie_id = c.id
-            JOIN types_indicateur t ON i.type_id = t.id
-            JOIN etats_indicateur e ON i.etat_id = e.id
-            ORDER BY i.code
-        """).fetchall()
-
-        # indicateur_etapes pour calculer worst color par indicateur
-        ie_rows = conn.execute("""
-            SELECT ie.indicateur_id,
-                   sg.severite as sev_global,
-                   sc.severite as sev_categorie,
-                   si.severite as sev_indicateur
-            FROM indicateur_etapes ie
-            LEFT JOIN statuts_etape sg ON ie.statut_global_id = sg.id
-            LEFT JOIN statuts_etape sc ON ie.statut_categorie_id = sc.id
-            LEFT JOIN statuts_etape si ON ie.statut_indicateur_id = si.id
-        """).fetchall()
-
-        ind_worst = {}  # indicateur_id -> max severite
-        for row in ie_rows:
-            sev = _step_worst_color_sev(row)
-            iid = row['indicateur_id']
-            if iid not in ind_worst or sev > ind_worst[iid]:
-                ind_worst[iid] = sev
-
-        # Construire la liste d'indicateurs
-        indicateurs = []
-        for ind in inds:
-            worst_sev = ind_worst.get(ind['id'], 0)
-            indicateurs.append({
-                'id': ind['id'],
-                'code': ind['code'],
-                'description': ind['description'],
-                'chapitre': ind['chapitre'] or '',
-                'categorie_nom': ind['categorie_nom'],
-                'type': ind['type'],
-                'etat': ind['etat'],
-                'type_class': _TYPE_CLASS.get(ind['type'], ''),
-                'etat_class': _ETAT_CLASS.get(ind['etat'], ''),
-                'ciblage': ind['ciblage'] or '',
-                'conformite': ind['conformite'] or '',
-                'worst': _SEVERITE_TO_COLOR.get(worst_sev, 'grey'),
-            })
-
-        # Categories avec count et worst
-        cats_rows = conn.execute("""
-            SELECT c.id, c.nom, c.ordre, COUNT(i.id) as count
-            FROM categories c
-            LEFT JOIN indicateurs i ON i.categorie_id = c.id
-            GROUP BY c.id
-            ORDER BY c.ordre
-        """).fetchall()
-
-        # Worst par categorie = max severite de ses indicateurs
-        cat_inds = {}
-        for ind in inds:
-            cat_inds.setdefault(ind['categorie_id'], []).append(ind['id'])
-
-        categories = []
-        for cat in cats_rows:
-            cat_ind_ids = cat_inds.get(cat['id'], [])
-            if cat_ind_ids:
-                worst_sev = max(ind_worst.get(iid, 0) for iid in cat_ind_ids)
-            else:
-                worst_sev = 0
-            categories.append({
-                'id': cat['id'],
-                'nom': cat['nom'],
-                'count': cat['count'],
-                'worst': _SEVERITE_TO_COLOR.get(worst_sev, 'grey'),
-            })
-
-        # Listes pour les selects de filtre
-        etats = [{'intitule': r['intitule']} for r in
-                 conn.execute("SELECT intitule FROM etats_indicateur ORDER BY ordre").fetchall()]
-        types = [{'intitule': r['intitule']} for r in
-                 conn.execute("SELECT intitule FROM types_indicateur ORDER BY ordre").fetchall()]
-
-        # Compteurs globaux
-        status_counts = {'green': 0, 'yellow': 0, 'orange': 0, 'red': 0, 'grey': 0}
-        for iid, sev in ind_worst.items():
-            c = _SEVERITE_TO_COLOR.get(sev, 'grey')
-            status_counts[c] = status_counts.get(c, 0) + 1
-
-        return {
-            'categories': categories,
-            'indicateurs': indicateurs,
-            'etats': etats,
-            'types': types,
-            'status_counts': status_counts,
-            'total': len(indicateurs),
-        }
-    finally:
-        conn.close()
-
-
 def get_global_counts():
     """Retourne {green: N, yellow: N, ...} sur tous les indicateurs."""
     conn = get_connection()
@@ -878,5 +488,294 @@ def get_global_counts():
             c = _SEVERITE_TO_COLOR.get(sev, 'grey')
             counts[c] += 1
         return counts
+    finally:
+        conn.close()
+
+
+# -------------------------------------------------------------------
+# Drill data pour la vue Globale
+# -------------------------------------------------------------------
+def get_global_drill_data():
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT ie.etape, i.categorie_id, c.nom as cat_nom,
+                   sg.severite as sev_global,
+                   sc.severite as sev_categorie,
+                   si.severite as sev_indicateur
+            FROM indicateur_etapes ie
+            JOIN indicateurs i ON ie.indicateur_id = i.id
+            JOIN categories c ON i.categorie_id = c.id
+            LEFT JOIN statuts_etape sg ON ie.statut_global_id = sg.id
+            LEFT JOIN statuts_etape sc ON ie.statut_categorie_id = sc.id
+            LEFT JOIN statuts_etape si ON ie.statut_indicateur_id = si.id
+        """).fetchall()
+
+        result = {}
+        for step_num in range(1, 8):
+            cat_data = {}
+            for r in rows:
+                if r['etape'] != step_num:
+                    continue
+                cid = r['categorie_id']
+                sev = _step_worst_color_sev(r)
+                if cid not in cat_data:
+                    cat_data[cid] = {'cat_nom': r['cat_nom'], 'worst_sev': sev, 'count': 0}
+                cat_data[cid]['count'] += 1
+                if sev > cat_data[cid]['worst_sev']:
+                    cat_data[cid]['worst_sev'] = sev
+
+            result[step_num] = [
+                {
+                    'cat_id': cid,
+                    'cat_nom': d['cat_nom'],
+                    'worst': _SEVERITE_TO_COLOR.get(d['worst_sev'], 'grey'),
+                    'count': d['count']
+                }
+                for cid, d in sorted(cat_data.items())
+            ]
+        return result
+    finally:
+        conn.close()
+
+
+# -------------------------------------------------------------------
+# Drill data pour la vue Categorie
+# -------------------------------------------------------------------
+def get_categorie_drill_data(categorie_id):
+    conn = get_connection()
+    try:
+        rows = conn.execute("""
+            SELECT ie.etape, ie.indicateur_id, i.code, i.description,
+                   sg.severite as sev_global,
+                   sc.severite as sev_categorie,
+                   si.severite as sev_indicateur
+            FROM indicateur_etapes ie
+            JOIN indicateurs i ON ie.indicateur_id = i.id
+            LEFT JOIN statuts_etape sg ON ie.statut_global_id = sg.id
+            LEFT JOIN statuts_etape sc ON ie.statut_categorie_id = sc.id
+            LEFT JOIN statuts_etape si ON ie.statut_indicateur_id = si.id
+            WHERE i.categorie_id = %s
+        """, (categorie_id,)).fetchall()
+
+        result = {}
+        for step_num in range(1, 8):
+            step_inds = []
+            for r in rows:
+                if r['etape'] != step_num:
+                    continue
+                sev = _step_worst_color_sev(r)
+                step_inds.append({
+                    'ind_id': r['indicateur_id'],
+                    'ind_code': r['code'],
+                    'ind_desc': r['description'],
+                    'worst': _SEVERITE_TO_COLOR.get(sev, 'grey')
+                })
+            step_inds.sort(key=lambda x: x['ind_code'])
+            result[step_num] = step_inds
+        return result
+    finally:
+        conn.close()
+
+
+# -------------------------------------------------------------------
+# Valeurs couche pour la modale (lecture)
+# -------------------------------------------------------------------
+def get_step_layer_values(etape):
+    conn = get_connection()
+    try:
+        row = conn.execute("""
+            SELECT sg.severite as sev, ie.commentaire_global as comment
+            FROM indicateur_etapes ie
+            LEFT JOIN statuts_etape sg ON ie.statut_global_id = sg.id
+            WHERE ie.etape = %s
+            LIMIT 1
+        """, (etape,)).fetchone()
+        if row:
+            return {'color': _SEVERITE_TO_COLOR.get(row['sev'], None) if row['sev'] is not None else None,
+                    'comment': row['comment'] or ''}
+        return {'color': None, 'comment': ''}
+    finally:
+        conn.close()
+
+
+def get_step_layer_values_cat(categorie_id, etape):
+    conn = get_connection()
+    try:
+        row = conn.execute("""
+            SELECT sc.severite as sev, ie.commentaire_categorie as comment
+            FROM indicateur_etapes ie
+            JOIN indicateurs i ON ie.indicateur_id = i.id
+            LEFT JOIN statuts_etape sc ON ie.statut_categorie_id = sc.id
+            WHERE ie.etape = %s AND i.categorie_id = %s
+            LIMIT 1
+        """, (etape, categorie_id)).fetchone()
+        if row:
+            return {'color': _SEVERITE_TO_COLOR.get(row['sev'], None) if row['sev'] is not None else None,
+                    'comment': row['comment'] or ''}
+        return {'color': None, 'comment': ''}
+    finally:
+        conn.close()
+
+
+# -------------------------------------------------------------------
+# Sauvegarde d'une couche pour une etape
+# -------------------------------------------------------------------
+def save_step(context, etape, layer, color_name, commentaire,
+              indicateur_id=None, categorie_id=None):
+    conn = get_connection()
+    try:
+        statut_id = None
+        if color_name:
+            sev = _COLOR_TO_SEVERITE.get(color_name)
+            if sev is not None:
+                row = conn.execute(
+                    "SELECT id FROM statuts_etape WHERE severite = %s", (sev,)
+                ).fetchone()
+                if row:
+                    statut_id = row['id']
+
+        statut_col = f'statut_{layer}_id'
+        comment_col = f'commentaire_{layer}'
+
+        # Determiner les indicateurs concernes
+        if context == 'global':
+            projet_id = get_active_project_id()
+            ind_ids = [r['id'] for r in conn.execute(
+                "SELECT id FROM indicateurs WHERE projet_id = %s", (projet_id,)
+            ).fetchall()]
+        elif context == 'categorie':
+            if not categorie_id and indicateur_id:
+                row = conn.execute(
+                    "SELECT categorie_id FROM indicateurs WHERE id = %s", (indicateur_id,)
+                ).fetchone()
+                if row:
+                    categorie_id = row['categorie_id']
+            ind_ids = [r['id'] for r in conn.execute(
+                "SELECT id FROM indicateurs WHERE categorie_id = %s", (categorie_id,)
+            ).fetchall()]
+        elif context == 'indicateur':
+            ind_ids = [indicateur_id] if indicateur_id else []
+
+        # UPSERT pour chaque indicateur (cree la ligne si elle n'existe pas)
+        for iid in ind_ids:
+            conn.execute(f"""
+                INSERT INTO indicateur_etapes (indicateur_id, etape, {statut_col}, {comment_col})
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (indicateur_id, etape)
+                DO UPDATE SET {statut_col} = EXCLUDED.{statut_col},
+                              {comment_col} = EXCLUDED.{comment_col}
+            """, (iid, etape, statut_id, commentaire or None))
+
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# -------------------------------------------------------------------
+# Vue Referentiel
+# -------------------------------------------------------------------
+_TYPE_CLASS = {'SLA': 'type-sla', 'KPI': 'type-kpi', 'XLA': 'type-xla'}
+_ETAT_CLASS = {
+    'Realise': 'etat-realise', 'En cours': 'etat-encours',
+    'A cadrer': 'etat-acadrer', 'Cadre': 'etat-cadre',
+    'En attente': 'etat-enattente', 'Annule': 'etat-annule',
+}
+
+
+def get_referentiel_data():
+    conn = get_connection()
+    try:
+        inds = conn.execute("""
+            SELECT i.id, i.code, i.description, i.chapitre, i.ciblage, i.conformite,
+                   i.categorie_id, c.nom as categorie_nom,
+                   t.intitule as type, e.intitule as etat
+            FROM indicateurs i
+            JOIN categories c ON i.categorie_id = c.id
+            JOIN types_indicateur t ON i.type_id = t.id
+            JOIN etats_indicateur e ON i.etat_id = e.id
+            ORDER BY i.code
+        """).fetchall()
+
+        ie_rows = conn.execute("""
+            SELECT ie.indicateur_id,
+                   sg.severite as sev_global,
+                   sc.severite as sev_categorie,
+                   si.severite as sev_indicateur
+            FROM indicateur_etapes ie
+            LEFT JOIN statuts_etape sg ON ie.statut_global_id = sg.id
+            LEFT JOIN statuts_etape sc ON ie.statut_categorie_id = sc.id
+            LEFT JOIN statuts_etape si ON ie.statut_indicateur_id = si.id
+        """).fetchall()
+
+        ind_worst = {}
+        for row in ie_rows:
+            sev = _step_worst_color_sev(row)
+            iid = row['indicateur_id']
+            if iid not in ind_worst or sev > ind_worst[iid]:
+                ind_worst[iid] = sev
+
+        indicateurs = []
+        for ind in inds:
+            worst_sev = ind_worst.get(ind['id'], 0)
+            indicateurs.append({
+                'id': ind['id'],
+                'code': ind['code'],
+                'description': ind['description'],
+                'chapitre': ind['chapitre'] or '',
+                'categorie_nom': ind['categorie_nom'],
+                'type': ind['type'],
+                'etat': ind['etat'],
+                'type_class': _TYPE_CLASS.get(ind['type'], ''),
+                'etat_class': _ETAT_CLASS.get(ind['etat'], ''),
+                'ciblage': ind['ciblage'] or '',
+                'conformite': ind['conformite'] or '',
+                'worst': _SEVERITE_TO_COLOR.get(worst_sev, 'grey'),
+            })
+
+        cats_rows = conn.execute("""
+            SELECT c.id, c.nom, c.ordre, COUNT(i.id) as count
+            FROM categories c
+            LEFT JOIN indicateurs i ON i.categorie_id = c.id
+            GROUP BY c.id, c.nom, c.ordre
+            ORDER BY c.ordre
+        """).fetchall()
+
+        cat_inds = {}
+        for ind in inds:
+            cat_inds.setdefault(ind['categorie_id'], []).append(ind['id'])
+
+        categories = []
+        for cat in cats_rows:
+            cat_ind_ids = cat_inds.get(cat['id'], [])
+            if cat_ind_ids:
+                worst_sev = max(ind_worst.get(iid, 0) for iid in cat_ind_ids)
+            else:
+                worst_sev = 0
+            categories.append({
+                'id': cat['id'],
+                'nom': cat['nom'],
+                'count': cat['count'],
+                'worst': _SEVERITE_TO_COLOR.get(worst_sev, 'grey'),
+            })
+
+        etats = [{'intitule': r['intitule']} for r in
+                 conn.execute("SELECT intitule FROM etats_indicateur ORDER BY ordre").fetchall()]
+        types = [{'intitule': r['intitule']} for r in
+                 conn.execute("SELECT intitule FROM types_indicateur ORDER BY ordre").fetchall()]
+
+        status_counts = {'green': 0, 'yellow': 0, 'orange': 0, 'red': 0, 'grey': 0}
+        for iid, sev in ind_worst.items():
+            c = _SEVERITE_TO_COLOR.get(sev, 'grey')
+            status_counts[c] = status_counts.get(c, 0) + 1
+
+        return {
+            'categories': categories,
+            'indicateurs': indicateurs,
+            'etats': etats,
+            'types': types,
+            'status_counts': status_counts,
+            'total': len(indicateurs),
+        }
     finally:
         conn.close()

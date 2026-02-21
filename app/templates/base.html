@@ -14,7 +14,7 @@
     <div class="main-tabs">
         <a class="main-tab{% if active_tab == 'roue' %} active{% endif %}" href="{{ url_for('main.vue_globale') }}">{{ project_name }}</a>
         <a class="main-tab{% if active_tab == 'referentiel' %} active{% endif %}" href="{{ url_for('main.vue_referentiel') }}">Referentiel</a>
-        {% if session.get('user_role') == 'admin' %}
+        {% if session.get('user_role') in ('admin', 'membre', 'lecteur') or session.get('user_real_role') == 'admin' %}
         <a class="main-tab{% if active_tab == 'membres' %} active{% endif %}" href="{{ url_for('main.vue_membres') }}">Membres</a>
         {% endif %}
     </div>
@@ -25,6 +25,11 @@
             <span class="current">Vue Globale</span>
             {% endblock %}
         </div>
+        {% if session.get('user_real_role') == 'admin' or (session.get('user_role') == 'admin' and not session.get('user_real_role')) %}
+        <button class="switch-role-btn" onclick="switchRole()" id="switch-role-btn">
+            {% if session.get('user_role') == 'admin' %}Mode membre{% else %}Mode admin{% endif %}
+        </button>
+        {% endif %}
         <span class="user-badge" title="{{ session.get('user_email', '') }}">
             <span class="user-avatar">{{ session.get('user_trigramme', '') or session.get('user_nom', '?')[:1] }}</span>
             <span>{{ session.get('user_nom', '') }}</span>
@@ -94,6 +99,15 @@
 
 <script>
     window._userRole = '{{ session.get("user_role", "") }}';
+    window._userRealRole = '{{ session.get("user_real_role", "") }}';
+    function switchRole() {
+        fetch('/api/switch-role', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) { location.reload(); }
+            else { alert(data.error || 'Erreur'); }
+        });
+    }
 </script>
 <script src="{{ url_for('static', filename='js/wheel.js') }}"></script>
 <script>

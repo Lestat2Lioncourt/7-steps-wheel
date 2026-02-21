@@ -1,6 +1,7 @@
 /**
  * Kanban board — drag & drop + modale CRUD + assignee autocomplete
  * Supporte les 3 niveaux : global, categorie, indicateur
+ * Supporte la hierarchie parent/enfant (taches chapeau)
  */
 
 var _saving = false;
@@ -15,6 +16,10 @@ function initKanban() {
             animation: 150,
             ghostClass: 'sortable-ghost',
             disabled: isLecteur,
+            filter: '.chapeau-card',
+            onMove: function(evt) {
+                if (evt.dragged.classList.contains('chapeau-card')) return false;
+            },
             onEnd: function(evt) {
                 var cardEl = evt.item;
                 var actionId = cardEl.getAttribute('data-id');
@@ -42,10 +47,19 @@ function initKanban() {
         });
     });
 
-    // Click on cards to edit
+    // Click on cards: drill-down for chapeau, edit for normal
     document.querySelectorAll('.kanban-card').forEach(function(card) {
         card.addEventListener('click', function() {
-            openActionModal(card.getAttribute('data-id'));
+            var childrenCount = parseInt(card.getAttribute('data-children') || '0');
+            if (childrenCount > 0) {
+                // Drill-down: navigate to ?parent=<id>
+                var actionId = card.getAttribute('data-id');
+                var url = new URL(location.href);
+                url.searchParams.set('parent', actionId);
+                location.href = url.toString();
+            } else {
+                openActionModal(card.getAttribute('data-id'));
+            }
         });
     });
 
@@ -59,8 +73,11 @@ function initKanban() {
         if (etape) {
             document.getElementById('km-etape').value = etape;
         }
-        // Nettoyer l'URL sans recharger
-        history.replaceState(null, '', location.pathname);
+        // Nettoyer l'URL sans recharger (garder parent si present)
+        var cleanUrl = new URL(location.href);
+        cleanUrl.searchParams.delete('new');
+        cleanUrl.searchParams.delete('etape');
+        history.replaceState(null, '', cleanUrl.toString());
     }
 }
 
@@ -203,6 +220,10 @@ function openActionModal(actionId) {
     saveBtn.textContent = 'Enregistrer';
     _saving = false;
 
+    // Reset readonly state on date fields
+    document.getElementById('km-date-debut').readOnly = false;
+    document.getElementById('km-date-fin').readOnly = false;
+
     if (actionId) {
         // Edition: hide niveau tabs, show info if inherited
         var card = document.querySelector('.kanban-card[data-id="' + actionId + '"]');
@@ -216,6 +237,13 @@ function openActionModal(actionId) {
         document.getElementById('km-description').value = card.getAttribute('data-description') || '';
         document.getElementById('km-date-debut').value = card.getAttribute('data-date-debut') || '';
         document.getElementById('km-date-fin').value = card.getAttribute('data-date-fin') || '';
+
+        // If chapeau: dates are readonly (computed from children)
+        var childrenCount = parseInt(card.getAttribute('data-children') || '0');
+        if (childrenCount > 0) {
+            document.getElementById('km-date-debut').readOnly = true;
+            document.getElementById('km-date-fin').readOnly = true;
+        }
 
         // Pre-fill assignee autocomplete
         var assigneeLogin = card.getAttribute('data-assignee') || '';
@@ -235,10 +263,10 @@ function openActionModal(actionId) {
         deleteBtn.style.display = '';
     } else {
         // Creation: show niveau tabs
-        title.textContent = 'Nouvelle action';
+        title.textContent = window._kanbanParentId ? 'Nouvelle sous-tache' : 'Nouvelle action';
         deleteBtn.style.display = 'none';
-        // Show tabs only if there are multiple choices (not global-level kanban)
-        if (niveauTabs.querySelectorAll('.modal-tab').length > 1) {
+        // Show tabs only if there are multiple choices (not global-level kanban) and not in drill-down
+        if (!window._kanbanParentId && niveauTabs.querySelectorAll('.modal-tab').length > 1) {
             niveauTabs.style.display = '';
         } else {
             niveauTabs.style.display = 'none';
@@ -317,6 +345,10 @@ function saveAction() {
             payload.categorie_id = window._kanbanCategorieId;
         }
         payload.cree_par = window._kanbanUserLogin || 'admin';
+        // Si en drill-down, rattacher au parent
+        if (window._kanbanParentId) {
+            payload.parent_id = window._kanbanParentId;
+        }
         fetch('/api/action/create', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -345,8 +377,12 @@ function deleteAction() {
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        if (data.ok) location.reload();
-        else _setLoading(false);
+        if (data.ok) {
+            location.reload();
+        } else {
+            alert(data.error || 'Erreur lors de la suppression');
+            _setLoading(false);
+        }
     })
     .catch(function() { _setLoading(false); });
 }

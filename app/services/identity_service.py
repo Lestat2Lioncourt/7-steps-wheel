@@ -1,129 +1,18 @@
 """
-Detection et memorisation de l'identite utilisateur.
-Sources : registre Windows (WorkplaceJoin, OneDrive Business), fichier local.
+Utilitaires d'identite : trigramme, placeholder user, rattachement projet.
+Adapte pour PostgreSQL (psycopg3) avec modele deux tables :
+  - common.utilisateurs : donnees globales utilisateur
+  - client_schema.projet_membres : rattachement au projet (role, dates)
 """
 
-import json
-import os
-import sys
-from pathlib import Path
+import re
 
-from app.database.db import DATA_DIR, get_connection
-
-IDENTITY_PATH = DATA_DIR / "identity.json"
-
-
-# -------------------------------------------------------------------
-# Detection depuis le registre Windows
-# -------------------------------------------------------------------
-def detect_from_registry():
-    """Detecte les identites O365 depuis le registre Windows.
-    Retourne une liste de {email, nom} (peut etre vide)."""
-    if sys.platform != "win32":
-        return []
-    try:
-        import winreg
-    except ImportError:
-        return []
-
-    accounts = []
-    seen_emails = set()
-
-    # 1. OneDrive Business (Business1, Business2, ...)
-    i = 1
-    while True:
-        try:
-            key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                rf"Software\Microsoft\OneDrive\Accounts\Business{i}",
-            )
-            email = None
-            nom = None
-            try:
-                email, _ = winreg.QueryValueEx(key, "UserEmail")
-            except OSError:
-                pass
-            try:
-                nom, _ = winreg.QueryValueEx(key, "UserName")
-            except OSError:
-                pass
-            winreg.CloseKey(key)
-            if email and email.lower() not in seen_emails:
-                seen_emails.add(email.lower())
-                accounts.append({"email": email, "nom": nom or email.split("@")[0]})
-            i += 1
-        except OSError:
-            break
-
-    # 2. Fallback : WorkplaceJoin
-    try:
-        base = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER,
-            r"Software\Microsoft\Windows NT\CurrentVersion\WorkplaceJoin\JoinInfo",
-        )
-        j = 0
-        while True:
-            try:
-                subname = winreg.EnumKey(base, j)
-                sub = winreg.OpenKey(base, subname)
-                email = None
-                try:
-                    email, _ = winreg.QueryValueEx(sub, "UserEmail")
-                except OSError:
-                    pass
-                winreg.CloseKey(sub)
-                if email and email.lower() not in seen_emails:
-                    seen_emails.add(email.lower())
-                    nom = os.environ.get("USERNAME", email.split("@")[0])
-                    accounts.append({"email": email, "nom": nom})
-                j += 1
-            except OSError:
-                break
-        winreg.CloseKey(base)
-    except OSError:
-        pass
-
-    return accounts
-
-
-# -------------------------------------------------------------------
-# Stockage fichier local
-# -------------------------------------------------------------------
-def get_stored_identity():
-    """Lit l'identite memorisee depuis identity.json.
-    Retourne {login, nom, email} ou None."""
-    if not IDENTITY_PATH.exists():
-        return None
-    try:
-        with open(IDENTITY_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if data.get("login") and data.get("nom"):
-            return data
-    except (json.JSONDecodeError, OSError):
-        pass
-    return None
-
-
-def save_identity(login, nom, email="", trigramme=""):
-    """Sauvegarde l'identite dans identity.json."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    data = {"login": login, "nom": nom, "email": email, "trigramme": trigramme}
-    with open(IDENTITY_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    return data
-
-
-def clear_identity():
-    """Supprime l'identite memorisee."""
-    if IDENTITY_PATH.exists():
-        IDENTITY_PATH.unlink()
+from app.database.db import get_connection, get_active_project_id
 
 
 # -------------------------------------------------------------------
 # Trigramme
 # -------------------------------------------------------------------
-import re
-
 def suggest_trigramme(nom_str):
     """Genere un trigramme a partir du nom.
     "NOM, Prenom" -> initiale prenom + 2 premieres lettres du nom (ex: PNO)
@@ -132,25 +21,22 @@ def suggest_trigramme(nom_str):
     if not nom_str:
         return ""
     s = nom_str.strip()
-    # Format "NOM, Prenom"
     if "," in s:
         parts = s.split(",", 1)
-        nom_part = re.sub(r"[^A-Za-zÀ-ÿ]", "", parts[0].strip())
-        prenom_part = re.sub(r"[^A-Za-zÀ-ÿ]", "", parts[1].strip())
+        nom_part = re.sub(r"[^A-Za-z\u00C0-\u00FF]", "", parts[0].strip())
+        prenom_part = re.sub(r"[^A-Za-z\u00C0-\u00FF]", "", parts[1].strip())
         if prenom_part and nom_part:
             return (prenom_part[0] + nom_part[:2]).upper()
         if nom_part:
             return nom_part[:3].upper()
         return ""
-    # Format "Prenom Nom" (au moins 2 mots)
     words = s.split()
     if len(words) >= 2:
-        prenom_part = re.sub(r"[^A-Za-zÀ-ÿ]", "", words[0])
-        nom_part = re.sub(r"[^A-Za-zÀ-ÿ]", "", words[-1])
+        prenom_part = re.sub(r"[^A-Za-z\u00C0-\u00FF]", "", words[0])
+        nom_part = re.sub(r"[^A-Za-z\u00C0-\u00FF]", "", words[-1])
         if prenom_part and nom_part:
             return (prenom_part[0] + nom_part[:2]).upper()
-    # Mot seul
-    clean = re.sub(r"[^A-Za-zÀ-ÿ]", "", s)
+    clean = re.sub(r"[^A-Za-z\u00C0-\u00FF]", "", s)
     return clean[:3].upper()
 
 
@@ -160,28 +46,45 @@ def suggest_trigramme(nom_str):
 def create_placeholder_user(email):
     """Cree un utilisateur placeholder a partir d'un email.
     login = partie avant @, nom = email, trigramme = NULL.
-    Si le login ou l'email existe deja, retourne le login existant."""
+    Si l'utilisateur existe deja, retourne le login existant.
+    Ajoute aussi au projet actif si pas deja membre."""
+    from datetime import datetime
+    projet_id = get_active_project_id()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
     conn = get_connection()
     try:
         # Verifier si un utilisateur avec cet email existe deja
         row = conn.execute(
-            "SELECT login FROM utilisateurs WHERE email = ?", (email,)
+            "SELECT id, login FROM utilisateurs WHERE email = %s", (email,)
         ).fetchone()
         if row:
-            return row["login"]
+            user_id = row['id']
+            login = row['login']
+        else:
+            login = email.split("@")[0].lower()
+            # Verifier si le login existe deja
+            row = conn.execute(
+                "SELECT id, login FROM utilisateurs WHERE login = %s", (login,)
+            ).fetchone()
+            if row:
+                user_id = row['id']
+                login = row['login']
+            else:
+                row = conn.execute("""
+                    INSERT INTO utilisateurs (login, nom, email, date_creation)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id
+                """, (login, email, email, now)).fetchone()
+                user_id = row['id']
 
-        login = email.split("@")[0].lower()
-        # Verifier si le login existe deja
-        row = conn.execute(
-            "SELECT login FROM utilisateurs WHERE login = ?", (login,)
-        ).fetchone()
-        if row:
-            return row["login"]
+        # Ajouter au projet si pas deja membre
+        if projet_id:
+            conn.execute("""
+                INSERT INTO projet_membres (projet_id, user_id, role, date_creation)
+                VALUES (%s, %s, 'membre', %s)
+                ON CONFLICT (projet_id, user_id) DO NOTHING
+            """, (projet_id, user_id, now))
 
-        conn.execute(
-            "INSERT INTO utilisateurs (login, nom, email, trigramme, role) VALUES (?, ?, ?, NULL, 'membre')",
-            (login, email, email),
-        )
         conn.commit()
         return login
     finally:
@@ -189,69 +92,98 @@ def create_placeholder_user(email):
 
 
 # -------------------------------------------------------------------
-# Synchronisation avec la table utilisateurs du projet actif
+# Synchronisation avec la base (common.utilisateurs + projet_membres)
 # -------------------------------------------------------------------
 def ensure_user_in_db(login, nom, email="", trigramme=""):
-    """Verifie si l'utilisateur est membre du projet.
-    - Si login existe : UPDATE nom/email/trigramme + date_derniere_connexion, retourne le role.
+    """Verifie si l'utilisateur est membre du projet actif.
+    Ne met plus a jour nom/email/trigramme (fixe par l'auth).
+    Seule date_derniere_connexion est mise a jour.
+    - Si login existe ET est membre : UPDATE date + retourne le role.
     - Si email match un placeholder (login different) : fusion, retourne le role.
     - Si email match un email secondaire : reconnait l'utilisateur, retourne le role.
-    - Si n'existe pas : retourne None (pas d'auto-insert)."""
+    - Si n'existe pas ou pas membre : retourne None."""
     from datetime import datetime
+    projet_id = get_active_project_id()
+    if not projet_id:
+        return None
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     conn = get_connection()
     try:
-        # Fusion placeholder : chercher un utilisateur avec cet email principal mais un login different
+        # Fusion placeholder : chercher un utilisateur avec cet email mais un login different
         if email:
-            placeholder = conn.execute(
-                "SELECT login, role FROM utilisateurs WHERE email = ? AND login != ?",
-                (email, login),
-            ).fetchone()
+            placeholder = conn.execute("""
+                SELECT u.id AS user_id, u.login, pm.role, pm.id AS pm_id
+                FROM utilisateurs u
+                JOIN projet_membres pm ON pm.user_id = u.id
+                WHERE u.email = %s AND u.login != %s AND pm.projet_id = %s
+            """, (email, login, projet_id)).fetchone()
             if placeholder:
                 old_login = placeholder["login"]
                 role = placeholder["role"]
+                user_id = placeholder["user_id"]
                 # Mettre a jour les FK dans actions
                 conn.execute(
-                    "UPDATE actions SET assignee_login = ? WHERE assignee_login = ?",
-                    (login, old_login),
+                    "UPDATE actions SET assignee_login = %s WHERE assignee_login = %s AND projet_id = %s",
+                    (login, old_login, projet_id),
                 )
                 conn.execute(
-                    "UPDATE actions SET cree_par = ? WHERE cree_par = ?",
-                    (login, old_login),
+                    "UPDATE actions SET cree_par = %s WHERE cree_par = %s AND projet_id = %s",
+                    (login, old_login, projet_id),
                 )
-                # Mettre a jour le placeholder lui-meme
+                # Mettre a jour le login + date connexion (pas nom/email/trigramme)
+                conn.execute("""
+                    UPDATE utilisateurs SET login = %s,
+                           date_derniere_connexion = %s, date_creation = COALESCE(date_creation, %s)
+                    WHERE id = %s
+                """, (login, now, now, user_id))
                 conn.execute(
-                    "UPDATE utilisateurs SET login = ?, nom = ?, trigramme = ?, date_derniere_connexion = ?, date_creation = COALESCE(date_creation, ?) WHERE email = ? AND login = ?",
-                    (login, nom, trigramme or None, now, now, email, old_login),
+                    "UPDATE projet_membres SET date_derniere_connexion = %s WHERE id = %s",
+                    (now, placeholder["pm_id"])
                 )
                 conn.commit()
                 return role
 
         # Chercher par login
-        row = conn.execute(
-            "SELECT role FROM utilisateurs WHERE login = ?", (login,)
-        ).fetchone()
+        row = conn.execute("""
+            SELECT u.id AS user_id, pm.role, pm.id AS pm_id
+            FROM utilisateurs u
+            JOIN projet_membres pm ON pm.user_id = u.id
+            WHERE u.login = %s AND pm.projet_id = %s
+        """, (login, projet_id)).fetchone()
         if row:
+            conn.execute("""
+                UPDATE utilisateurs SET date_derniere_connexion = %s,
+                       date_creation = COALESCE(date_creation, %s)
+                WHERE id = %s
+            """, (now, now, row["user_id"]))
             conn.execute(
-                "UPDATE utilisateurs SET nom = ?, email = ?, trigramme = ?, date_derniere_connexion = ?, date_creation = COALESCE(date_creation, ?) WHERE login = ?",
-                (nom, email or None, trigramme or None, now, now, login),
+                "UPDATE projet_membres SET date_derniere_connexion = %s WHERE id = %s",
+                (now, row["pm_id"])
             )
             conn.commit()
             return row["role"]
 
         # Chercher par email secondaire
         if email:
-            secondary = conn.execute(
-                "SELECT login, nom, email, trigramme, role FROM utilisateurs WHERE (',' || emails_secondaires || ',') LIKE '%,' || ? || ',%'",
-                (email,),
-            ).fetchone()
+            secondary = conn.execute("""
+                SELECT u.id AS user_id, u.login, u.nom, u.email, u.trigramme,
+                       pm.role, pm.id AS pm_id
+                FROM utilisateurs u
+                JOIN projet_membres pm ON pm.user_id = u.id
+                WHERE %s = ANY(string_to_array(u.emails_secondaires, ','))
+                      AND pm.projet_id = %s
+            """, (email, projet_id)).fetchone()
             if secondary:
+                conn.execute("""
+                    UPDATE utilisateurs SET date_derniere_connexion = %s,
+                           date_creation = COALESCE(date_creation, %s)
+                    WHERE id = %s
+                """, (now, now, secondary["user_id"]))
                 conn.execute(
-                    "UPDATE utilisateurs SET date_derniere_connexion = ?, date_creation = COALESCE(date_creation, ?) WHERE login = ?",
-                    (now, now, secondary["login"]),
+                    "UPDATE projet_membres SET date_derniere_connexion = %s WHERE id = %s",
+                    (now, secondary["pm_id"])
                 )
                 conn.commit()
-                # Retourner un dict avec les infos du membre principal
                 return {
                     "role": secondary["role"],
                     "login": secondary["login"],
@@ -267,15 +199,39 @@ def ensure_user_in_db(login, nom, email="", trigramme=""):
 
 
 def add_user_to_project(login, nom, email="", trigramme="", role="membre"):
-    """Insere un utilisateur dans la table utilisateurs du projet actif."""
+    """Insere un utilisateur dans common.utilisateurs (si necessaire) et l'ajoute au projet actif."""
     from datetime import datetime
+    projet_id = get_active_project_id()
+    if not projet_id:
+        return
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     conn = get_connection()
     try:
-        conn.execute(
-            "INSERT INTO utilisateurs (login, nom, email, trigramme, role, date_creation, date_derniere_connexion) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (login, nom, email or None, trigramme or None, role, now, now),
-        )
+        # Trouver ou creer l'utilisateur
+        row = conn.execute(
+            "SELECT id FROM utilisateurs WHERE login = %s", (login,)
+        ).fetchone()
+        if row:
+            user_id = row['id']
+            conn.execute("""
+                UPDATE utilisateurs SET nom = %s, email = %s, trigramme = %s,
+                       date_derniere_connexion = %s, date_creation = COALESCE(date_creation, %s)
+                WHERE id = %s
+            """, (nom, email or None, trigramme or None, now, now, user_id))
+        else:
+            row = conn.execute("""
+                INSERT INTO utilisateurs (login, nom, email, trigramme, date_creation, date_derniere_connexion)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (login, nom, email or None, trigramme or None, now, now)).fetchone()
+            user_id = row['id']
+
+        # Ajouter au projet
+        conn.execute("""
+            INSERT INTO projet_membres (projet_id, user_id, role, date_creation, date_derniere_connexion)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (projet_id, user_id) DO NOTHING
+        """, (projet_id, user_id, role, now, now))
         conn.commit()
     finally:
         conn.close()

@@ -20,6 +20,9 @@ data/projects.json
 # Cle secrete Flask (generee automatiquement)
 data/.secret_key
 
+# Variables d'environnement (credentials DB)
+.env
+
 # IDE
 .vscode/
 .idea/

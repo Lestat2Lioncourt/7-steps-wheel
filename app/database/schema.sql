@@ -105,6 +105,7 @@ CREATE TABLE actions (
     commentaire         TEXT,
     date_debut          TEXT,
     date_fin            TEXT,
+    parent_id           INTEGER REFERENCES actions(id),
     cree_par            TEXT NOT NULL REFERENCES utilisateurs(login),
     date_creation       TEXT NOT NULL,
     date_modification   TEXT,

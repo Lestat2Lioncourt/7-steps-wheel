@@ -20,8 +20,9 @@
         <h2>Membres du projet</h2>
         <div class="subtitle">Gestion des acces et des roles</div>
     </div>
+    {% if session.get('user_role') == 'admin' %}
     <button class="kanban-new-btn" onclick="openAddMemberModal()">+ Ajouter un membre</button>
-    <button class="btn btn-secondary" onclick="copyInvitation()" title="Copier le lien d'invitation dans le presse-papiers">Copier l'invitation</button>
+    {% endif %}
 </div>
 
 <div class="table-area">
@@ -31,17 +32,13 @@
                 <th>Trigramme</th>
                 <th>Nom</th>
                 <th>Email</th>
-                <th>Emails secondaires</th>
                 <th>Role</th>
-                <th>Cree le</th>
                 <th>Derniere connexion</th>
-                <th>Fin prevue</th>
-                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for m in members %}
-            <tr data-id="{{ m.id }}">
+            <tr data-id="{{ m.id }}" onclick="openMemberDetail({{ m|tojson }})" style="cursor:pointer">
                 <td>
                     {% if m.trigramme %}
                     <span class="card-tri">{{ m.trigramme }}</span>
@@ -49,43 +46,76 @@
                     <span style="color:#555">-</span>
                     {% endif %}
                 </td>
-                <td>{{ m.nom }}</td>
+                <td>{{ m.nom }}{% if m.login == session.get('user_login') %} <span style="color:#555;font-size:10px">(vous)</span>{% endif %}</td>
                 <td style="color:#888;font-size:11px">{{ m.email or '-' }}</td>
                 <td>
-                    <input type="text" class="emails-sec-input" data-id="{{ m.id }}"
-                           value="{{ m.emails_secondaires or '' }}"
-                           placeholder="email1, email2"
-                           onchange="updateEmails({{ m.id }}, this.value)">
-                </td>
-                <td>
-                    <select class="role-select" data-id="{{ m.id }}" onchange="changeRole({{ m.id }}, this.value)">
-                        <option value="admin"{% if m.role == 'admin' %} selected{% endif %}>Admin</option>
-                        <option value="membre"{% if m.role == 'membre' %} selected{% endif %}>Membre</option>
-                        <option value="lecteur"{% if m.role == 'lecteur' %} selected{% endif %}>Lecteur</option>
-                        <option value="information"{% if m.role == 'information' %} selected{% endif %}>Information</option>
-                    </select>
-                </td>
-                <td style="color:#888;font-size:11px;white-space:nowrap">{{ m.date_creation or '-' }}</td>
-                <td style="color:#888;font-size:11px;white-space:nowrap">{{ m.date_derniere_connexion or '-' }}</td>
-                <td>
-                    <input type="date" class="date-fin-input" data-id="{{ m.id }}"
-                           value="{{ m.date_fin or '' }}"
-                           onchange="updateDateFin({{ m.id }}, this.value)">
-                </td>
-                <td>
-                    {% if m.login != session.get('user_login') %}
-                    <button class="btn-clear" style="padding:4px 10px;font-size:10px" onclick="removeMember({{ m.id }}, '{{ m.nom }}')">Retirer</button>
-                    {% else %}
-                    <span style="color:#555;font-size:10px">vous</span>
+                    <span class="role-text-badge role-{{ m.role }}">{{ m.role|capitalize }}</span>
+                    {% if m.invitation_pending %}
+                    <span style="font-size:9px;color:#eab308;margin-left:4px;vertical-align:middle" title="Compte en attente d'activation">&#9679; en attente</span>
                     {% endif %}
                 </td>
+                <td style="color:#888;font-size:11px;white-space:nowrap">{{ m.date_derniere_connexion or '-' }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
 
+<!-- Modale detail membre -->
+<div class="kanban-modal-overlay" id="member-detail-overlay" onclick="if(event.target===this)closeMemberDetail()">
+    <div class="kanban-modal" style="width:520px">
+        <h3 id="md-title">Detail du membre</h3>
+        <input type="hidden" id="md-id">
+        <input type="hidden" id="md-login">
+        <div class="member-detail-row">
+            <div class="member-detail-field">
+                <label for="md-nom">Nom</label>
+                <input type="text" id="md-nom" placeholder="NOM, Prenom">
+            </div>
+            <div class="member-detail-field" style="max-width:100px">
+                <label for="md-trigramme">Trigramme</label>
+                <input type="text" id="md-trigramme" placeholder="ABC" maxlength="4">
+            </div>
+        </div>
+        <div class="member-detail-field">
+            <label for="md-email">Email principal</label>
+            <input type="text" id="md-email" readonly>
+        </div>
+        <div class="member-detail-field">
+            <label for="md-role">Role</label>
+            <select id="md-role">
+                <option value="admin">Admin</option>
+                <option value="membre">Membre</option>
+                <option value="lecteur">Lecteur</option>
+                <option value="information">Information</option>
+            </select>
+        </div>
+        <div class="member-detail-field">
+            <label for="md-emails-sec">Emails secondaires</label>
+            <input type="text" id="md-emails-sec" placeholder="email1@ex.com, email2@ex.com">
+        </div>
+        <div class="member-detail-row">
+            <div class="member-detail-field">
+                <label>Date de creation</label>
+                <div class="field-value" id="md-date-creation">-</div>
+            </div>
+            <div class="member-detail-field">
+                <label>Derniere connexion</label>
+                <div class="field-value" id="md-date-connexion">-</div>
+            </div>
+        </div>
+        <div class="member-detail-field">
+            <label for="md-date-fin">Date de fin previsionnelle</label>
+            <input type="date" id="md-date-fin">
+        </div>
+        <div class="form-actions" style="margin-top:16px" id="md-actions">
+            <!-- Filled by JS based on role -->
+        </div>
+    </div>
+</div>
+
 <!-- Modale ajout membre -->
+{% if session.get('user_role') == 'admin' %}
 <div class="kanban-modal-overlay" id="add-member-overlay" onclick="if(event.target===this)closeAddMemberModal()">
     <div class="kanban-modal">
         <h3>Ajouter un membre</h3>
@@ -119,13 +149,13 @@
         </form>
     </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
     window._projectName = {{ project_name|tojson }};
-    window._dbPath = {{ db_path|tojson }};
-    window._appPath = {{ app_path|tojson }};
+    window._currentUserLogin = {{ session.get('user_login', '')|tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/membres.js') }}"></script>
 {% endblock %}

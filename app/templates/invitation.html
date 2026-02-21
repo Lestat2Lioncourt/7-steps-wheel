@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roue CSI - Invitation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="accueil-container">
+    {% if not valid %}
+    {# Token invalide ou expire #}
+    <h1 class="accueil-title">Lien invalide</h1>
+    <p class="accueil-subtitle" style="color:#dc2626">Ce lien d'invitation est invalide ou a expire.</p>
+    <p style="margin-top:16px;text-align:center">
+        <a href="{{ url_for('main.login') }}" class="project-card-btn"
+           style="display:inline-block;padding:10px 24px;font-size:13px;border:none;border-radius:8px;text-decoration:none;cursor:pointer">
+            Aller a la page de connexion
+        </a>
+    </p>
+
+    {% else %}
+    {# Token valide — formulaire activation #}
+    <h1 class="accueil-title">Bienvenue{{ ' ' + inv.user_nom if inv.user_nom else '' }}</h1>
+    <p class="accueil-subtitle">Activez votre compte en definissant votre mot de passe</p>
+
+    {% if error %}
+    <p style="color:#dc2626;font-size:13px;margin-bottom:12px">{{ error }}</p>
+    {% endif %}
+
+    <form method="POST" class="login-form">
+        <div class="login-field">
+            <label for="nom">Nom</label>
+            <input type="text" id="nom" name="nom"
+                   value="{{ prefill.nom or inv.user_nom or '' }}"
+                   placeholder="NOM, Prenom">
+        </div>
+        <div class="login-field">
+            <label for="trigramme">Trigramme</label>
+            <input type="text" id="trigramme" name="trigramme"
+                   value="{{ prefill.trigramme or inv.user_trigramme or '' }}"
+                   placeholder="ABC" maxlength="4"
+                   style="text-transform:uppercase;width:80px;letter-spacing:2px;font-weight:700;text-align:center">
+            <span style="font-size:10px;color:#555;margin-left:6px">Auto-suggere depuis le nom</span>
+        </div>
+        <div class="login-field">
+            <label for="password">Mot de passe</label>
+            <input type="password" id="password" name="password"
+                   placeholder="6 caracteres minimum" required autofocus>
+        </div>
+        <div class="login-field">
+            <label for="password2">Confirmer le mot de passe</label>
+            <input type="password" id="password2" name="password2"
+                   placeholder="Repetez le mot de passe" required>
+        </div>
+        <button type="submit" class="project-card-btn" style="margin-top:12px;padding:10px 32px;font-size:14px;border:none;border-radius:8px;cursor:pointer">
+            Activer mon compte
+        </button>
+    </form>
+
+    <script>
+    (function() {
+        var nomInput = document.getElementById('nom');
+        var triInput = document.getElementById('trigramme');
+        if (!nomInput || !triInput) return;
+        var userEdited = triInput.value.trim() !== '';
+        triInput.addEventListener('input', function() { userEdited = true; });
+
+        nomInput.addEventListener('input', function() {
+            if (userEdited) return;
+            var nom = nomInput.value.trim();
+            if (!nom) { triInput.value = ''; return; }
+            fetch('/api/trigramme/suggest?nom=' + encodeURIComponent(nom))
+                .then(function(r) { return r.json(); })
+                .then(function(d) { if (!userEdited) triInput.value = d.trigramme; });
+        });
+    })();
+    </script>
+    {% endif %}
+</div>
+
+</body>
+</html>

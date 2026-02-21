@@ -1,5 +1,6 @@
 /* Gestion des membres du projet */
 
+/* ---- Modale ajout membre ---- */
 function openAddMemberModal() {
     document.getElementById('am-email').value = '';
     document.getElementById('am-nom').value = '';
@@ -35,25 +36,99 @@ function submitAddMember() {
     });
 }
 
-function changeRole(userId, newRole) {
-    fetch('/api/membres/' + userId + '/role', {
-        method: 'POST',
+/* ---- Modale detail membre ---- */
+var _currentMember = null;
+
+function openMemberDetail(member) {
+    _currentMember = member;
+    var isAdmin = window._userRole === 'admin';
+    var isSelf = member.login === window._currentUserLogin;
+
+    document.getElementById('md-id').value = member.id;
+    document.getElementById('md-login').value = member.login;
+    document.getElementById('md-title').textContent = member.nom;
+    document.getElementById('md-nom').value = member.nom || '';
+    document.getElementById('md-trigramme').value = member.trigramme || '';
+    document.getElementById('md-email').value = member.email || '';
+    document.getElementById('md-role').value = member.role || 'membre';
+    document.getElementById('md-emails-sec').value = member.emails_secondaires || '';
+    document.getElementById('md-date-creation').textContent = member.date_creation || '-';
+    document.getElementById('md-date-connexion').textContent = member.date_derniere_connexion || '-';
+    document.getElementById('md-date-fin').value = member.date_fin || '';
+
+    // Lecture seule pour non-admins
+    var fields = ['md-nom', 'md-trigramme', 'md-emails-sec', 'md-date-fin'];
+    fields.forEach(function(id) {
+        document.getElementById(id).readOnly = !isAdmin;
+    });
+    var roleSelect = document.getElementById('md-role');
+    roleSelect.disabled = !isAdmin;
+
+    // Boutons d'action
+    var actionsDiv = document.getElementById('md-actions');
+    if (isAdmin) {
+        var retireBtn = '';
+        if (!isSelf) {
+            retireBtn = '<button type="button" class="btn-clear" onclick="removeMemberFromDetail()">Retirer</button>';
+        }
+        var inviteBtn = '';
+        if (!isSelf) {
+            inviteBtn = '<button type="button" class="btn btn-secondary" onclick="generateInvitation(' + member.id + ')" id="md-invite-btn">'
+                + (member.invitation_pending ? 'Renvoyer l\'invitation' : 'Lien d\'invitation')
+                + '</button>';
+        }
+        actionsDiv.innerHTML = retireBtn
+            + inviteBtn
+            + '<span style="flex:1"></span>'
+            + '<button type="button" class="btn btn-secondary" onclick="closeMemberDetail()">Annuler</button>'
+            + '<button type="button" class="btn btn-primary" onclick="saveMember()">Enregistrer</button>';
+    } else {
+        actionsDiv.innerHTML = '<span style="flex:1"></span>'
+            + '<button type="button" class="btn btn-secondary" onclick="closeMemberDetail()">Fermer</button>';
+    }
+
+    document.getElementById('member-detail-overlay').classList.add('open');
+}
+
+function closeMemberDetail() {
+    document.getElementById('member-detail-overlay').classList.remove('open');
+    _currentMember = null;
+}
+
+function saveMember() {
+    var id = document.getElementById('md-id').value;
+    var data = {
+        nom: document.getElementById('md-nom').value.trim(),
+        trigramme: document.getElementById('md-trigramme').value.trim(),
+        role: document.getElementById('md-role').value,
+        emails_secondaires: document.getElementById('md-emails-sec').value.trim(),
+        date_fin: document.getElementById('md-date-fin').value
+    };
+    if (!data.nom) {
+        alert('Le nom est requis.');
+        return;
+    }
+    fetch('/api/membres/' + id, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: newRole })
+        body: JSON.stringify(data)
     })
     .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (!data.ok) {
-            alert(data.error || 'Erreur');
+    .then(function(resp) {
+        if (resp.ok) {
             location.reload();
+        } else {
+            alert(resp.error || 'Erreur');
         }
     });
 }
 
-function removeMember(userId, name) {
-    if (!confirm('Retirer ' + name + ' du projet ?')) return;
+function removeMemberFromDetail() {
+    var id = document.getElementById('md-id').value;
+    var nom = document.getElementById('md-nom').value;
+    if (!confirm('Retirer ' + nom + ' du projet ?')) return;
 
-    fetch('/api/membres/' + userId + '/remove', {
+    fetch('/api/membres/' + id + '/remove', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
     })
@@ -67,57 +142,35 @@ function removeMember(userId, name) {
     });
 }
 
-function copyInvitation() {
-    var name = window._projectName || 'Roue CSI';
-    var dbPath = window._dbPath || '(chemin non disponible)';
-    var appPath = window._appPath || '(chemin non disponible)';
-    var text = 'Vous avez ete ajoute au projet "' + name + '".\n\n'
-             + 'Pour y acceder :\n'
-             + '1. Double-cliquez sur :\n'
-             + '   ' + appPath + '\n'
-             + '2. Dans l\'accueil, cliquez "Rattacher existant"\n'
-             + '3. Donnez un nom au projet et collez ce chemin :\n'
-             + '   ' + dbPath + '\n\n'
-             + '(Etape 2-3 uniquement a la premiere utilisation.)';
-    navigator.clipboard.writeText(text).then(function() {
-        var btn = document.querySelector('[onclick="copyInvitation()"]');
-        if (btn) {
-            var orig = btn.textContent;
-            btn.textContent = 'Copie !';
-            setTimeout(function() { btn.textContent = orig; }, 2000);
-        }
-    });
-}
+/* ---- Invitation par lien ---- */
+function generateInvitation(memberId) {
+    var btn = document.getElementById('md-invite-btn');
+    if (btn) btn.textContent = 'Generation...';
 
-function updateEmails(userId, emails) {
-    fetch('/api/membres/' + userId + '/emails', {
+    fetch('/api/membres/' + memberId + '/invitation', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emails_secondaires: emails })
+        headers: { 'Content-Type': 'application/json' }
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        if (!data.ok) {
+        if (data.ok && data.url) {
+            navigator.clipboard.writeText(data.url).then(function() {
+                if (btn) {
+                    btn.textContent = 'Lien copie !';
+                    setTimeout(function() { btn.textContent = 'Lien d\'invitation'; }, 2500);
+                }
+            }).catch(function() {
+                prompt('Copiez ce lien :', data.url);
+                if (btn) btn.textContent = 'Lien d\'invitation';
+            });
+        } else {
             alert(data.error || 'Erreur');
-            location.reload();
+            if (btn) btn.textContent = 'Lien d\'invitation';
         }
     });
 }
 
-function updateDateFin(userId, dateFin) {
-    fetch('/api/membres/' + userId + '/date_fin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date_fin: dateFin })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (!data.ok) {
-            alert(data.error || 'Erreur');
-        }
-    });
-}
-
+/* ---- Trigramme suggestion (modale ajout) ---- */
 var _triSuggestTimer = null;
 function suggestTrigramme() {
     clearTimeout(_triSuggestTimer);

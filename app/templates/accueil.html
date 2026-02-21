@@ -12,48 +12,55 @@
     <h1 class="accueil-title">Suivi de mise en place des indicateurs des contrats</h1>
     <p class="accueil-subtitle">Connecte : {{ user_nom }}</p>
 
-    {% if attach_error %}
-    <p style="color:#dc2626;font-size:13px">{{ attach_error }}</p>
-    {% endif %}
-
     {% if request.args.get('error') == 'non_membre' %}
     <p style="color:#dc2626;font-size:13px">Vous n'etes pas membre de ce projet. Contactez un administrateur pour etre ajoute.</p>
     {% elif request.args.get('error') == 'info_only' %}
     <p style="color:#eab308;font-size:13px">Votre role sur ce projet est "Information" : vous recevrez les comptes-rendus mais n'avez pas acces a l'application.</p>
     {% endif %}
 
-    <p class="accueil-subtitle">Selectionnez un projet</p>
-    <div class="project-cards">
-        {% for p in projects %}
-        <div class="project-card">
-            <a class="project-card-name" href="{{ url_for('main.select_project', project_id=p.id) }}">{{ p.name }}</a>
-            <div class="project-card-file">{{ p.db_path if p.db_path else p.db_file }}</div>
-            <button type="button" class="project-card-btn project-card-btn-edit"
-                    onclick="event.stopPropagation(); showEditDialog('{{ p.id }}', '{{ p.name }}', '{{ p.db_path if p.db_path else '' }}')">Editer</button>
+    {% for c in clients %}
+    <div class="client-section">
+        <div class="client-header">
+            <h3 class="client-name">{{ c.nom }}</h3>
+            <button type="button" class="client-edit-btn" title="Modifier le client"
+                    onclick="event.stopPropagation(); showEditClientDialog({{ c.id }}, '{{ c.nom|e }}')">&#9998;</button>
         </div>
-        {% endfor %}
+        <div class="project-cards">
+            {% for p in c.projects %}
+            <div class="project-card">
+                <a class="project-card-name" href="{{ url_for('main.select_project', client_id=c.id, project_id=p.id) }}">{{ p.nom }}</a>
+                <div class="project-card-file">{{ p.date_creation }}</div>
+                <button type="button" class="project-card-btn project-card-btn-edit"
+                        onclick="event.stopPropagation(); showEditProjectDialog({{ c.id }}, {{ p.id }}, '{{ p.nom|e }}')">Editer</button>
+            </div>
+            {% endfor %}
 
-        <!-- Carte creation -->
-        <div class="project-card new-project-card" onclick="showDialog('new-project-dialog')">
-            <div class="project-card-name" style="font-size:32px;color:#3a7bd5">+</div>
-            <div class="project-card-file">Nouveau projet</div>
+            <!-- Carte creation projet dans ce client -->
+            <div class="project-card new-project-card" onclick="showNewProjectDialog({{ c.id }})">
+                <div class="project-card-name" style="font-size:32px;color:#3a7bd5">+</div>
+                <div class="project-card-file">Nouveau projet</div>
+            </div>
         </div>
+    </div>
+    {% endfor %}
 
-        <!-- Carte rattachement -->
-        <div class="project-card new-project-card" onclick="showDialog('attach-project-dialog')">
-            <div class="project-card-name" style="font-size:24px;color:#a78bfa">&#128279;</div>
-            <div class="project-card-file">Rattacher existant</div>
-        </div>
+    {% if not clients %}
+    <p class="accueil-subtitle" style="margin-top:24px;color:#555">Aucun client. Creez-en un pour commencer.</p>
+    {% endif %}
+
+    <!-- Bouton creation client -->
+    <div style="margin-top:24px;text-align:center">
+        <button class="btn btn-primary" onclick="showDialog('new-client-dialog')">+ Nouveau client</button>
     </div>
 </div>
 
-<!-- Dialog creation projet -->
-<div class="new-project-overlay" id="new-project-dialog" onclick="if(event.target===this)this.style.display='none'">
-    <form class="login-form" method="POST" action="{{ url_for('main.create_project_route') }}">
-        <h3 style="color:#fff;margin-bottom:14px;font-size:16px">Nouveau projet</h3>
+<!-- Dialog creation client -->
+<div class="new-project-overlay" id="new-client-dialog" onclick="if(event.target===this)this.style.display='none'">
+    <form class="login-form" method="POST" action="{{ url_for('main.create_client_route') }}">
+        <h3 style="color:#fff;margin-bottom:14px;font-size:16px">Nouveau client</h3>
         <div class="login-field">
-            <label for="project-name">Nom du projet</label>
-            <input type="text" id="project-name" name="name" placeholder="Ex: Contrat ACME 2026" required>
+            <label for="client-name">Nom du client / contrat</label>
+            <input type="text" id="client-name" name="name" placeholder="Ex: ACME Corp" required>
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
             <button type="button" class="btn btn-secondary" onclick="this.closest('.new-project-overlay').style.display='none'">Annuler</button>
@@ -62,22 +69,34 @@
     </form>
 </div>
 
-<!-- Dialog rattachement projet -->
-<div class="new-project-overlay" id="attach-project-dialog" onclick="if(event.target===this)this.style.display='none'">
-    <form class="login-form" method="POST" action="{{ url_for('main.attach_project_route') }}">
-        <h3 style="color:#fff;margin-bottom:14px;font-size:16px">Rattacher un projet existant</h3>
+<!-- Dialog creation projet (dynamique : client_id injecte par JS) -->
+<div class="new-project-overlay" id="new-project-dialog" onclick="if(event.target===this)this.style.display='none'">
+    <form class="login-form" id="new-project-form" method="POST">
+        <h3 style="color:#fff;margin-bottom:14px;font-size:16px">Nouveau projet</h3>
         <div class="login-field">
-            <label for="attach-name">Nom du projet</label>
-            <input type="text" id="attach-name" name="name" placeholder="Ex: Contrat ACME 2026" required>
+            <label for="project-name">Nom du projet</label>
+            <input type="text" id="project-name" name="name" placeholder="Ex: Contrat 2026" required>
         </div>
-        <div class="login-field">
-            <label for="attach-path">Chemin vers le fichier .db</label>
-            <input type="text" id="attach-path" name="path" placeholder="C:\Users\...\projet.db" required>
-        </div>
-        <p style="font-size:10px;color:#555;margin-bottom:8px">Le fichier sera reference directement (pas de copie). Tout le monde travaille sur la meme base.</p>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
             <button type="button" class="btn btn-secondary" onclick="this.closest('.new-project-overlay').style.display='none'">Annuler</button>
-            <button type="submit" class="btn btn-primary">Rattacher</button>
+            <button type="submit" class="btn btn-primary">Creer</button>
+        </div>
+    </form>
+</div>
+
+<!-- Dialog modification client -->
+<div class="new-project-overlay" id="edit-client-dialog" onclick="if(event.target===this)this.style.display='none'">
+    <form class="login-form" id="edit-client-form" method="POST">
+        <h3 style="color:#fff;margin-bottom:14px;font-size:16px">Modifier le client</h3>
+        <div class="login-field">
+            <label for="edit-client-name">Nom du client</label>
+            <input type="text" id="edit-client-name" name="name" required>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+            <button type="button" class="btn-clear" id="edit-client-delete-btn" onclick="confirmDeleteClient()">Supprimer</button>
+            <span style="flex:1"></span>
+            <button type="button" class="btn btn-secondary" onclick="this.closest('.new-project-overlay').style.display='none'">Annuler</button>
+            <button type="submit" class="btn btn-primary">Enregistrer</button>
         </div>
     </form>
 </div>
@@ -87,17 +106,11 @@
     <form class="login-form" id="edit-project-form" method="POST">
         <h3 style="color:#fff;margin-bottom:14px;font-size:16px">Modifier le projet</h3>
         <div class="login-field">
-            <label for="edit-name">Nom du projet</label>
-            <input type="text" id="edit-name" name="name" required>
-        </div>
-        <div class="login-field" id="edit-path-field" style="display:none">
-            <label for="edit-path">Chemin .db</label>
-            <input type="text" id="edit-path" readonly style="color:#555;cursor:default">
+            <label for="edit-project-name">Nom du projet</label>
+            <input type="text" id="edit-project-name" name="name" required>
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-            <form id="edit-delete-form" method="POST" style="margin:0">
-                <button type="button" class="btn-clear" id="edit-delete-btn" onclick="confirmDelete()">Retirer</button>
-            </form>
+            <button type="button" class="btn-clear" id="edit-project-delete-btn" onclick="confirmDeleteProject()">Supprimer</button>
             <span style="flex:1"></span>
             <button type="button" class="btn btn-secondary" onclick="this.closest('.new-project-overlay').style.display='none'">Annuler</button>
             <button type="submit" class="btn btn-primary">Enregistrer</button>
@@ -106,6 +119,8 @@
 </div>
 
 <script>
+var _editClientId = null;
+var _editProjectClientId = null;
 var _editProjectId = null;
 
 function showDialog(id) {
@@ -114,27 +129,49 @@ function showDialog(id) {
     if (input) setTimeout(function() { input.focus(); }, 100);
 }
 
-function showEditDialog(projectId, name, dbPath) {
-    _editProjectId = projectId;
-    document.getElementById('edit-project-form').action = '/projet/' + projectId + '/modifier';
-    document.getElementById('edit-name').value = name;
-    var pathField = document.getElementById('edit-path-field');
-    if (dbPath) {
-        document.getElementById('edit-path').value = dbPath;
-        pathField.style.display = '';
-    } else {
-        pathField.style.display = 'none';
-    }
-    document.getElementById('edit-project-dialog').style.display = 'flex';
-    setTimeout(function() { document.getElementById('edit-name').focus(); }, 100);
+/* --- Nouveau projet dans un client --- */
+function showNewProjectDialog(clientId) {
+    document.getElementById('new-project-form').action = '/client/' + clientId + '/projet/nouveau';
+    document.getElementById('project-name').value = '';
+    document.getElementById('new-project-dialog').style.display = 'flex';
+    setTimeout(function() { document.getElementById('project-name').focus(); }, 100);
 }
 
-function confirmDelete() {
-    if (!_editProjectId) return;
-    if (!confirm('Retirer ce projet de la liste ?\n(Le fichier de donnees ne sera pas supprime)')) return;
+/* --- Modification client --- */
+function showEditClientDialog(clientId, name) {
+    _editClientId = clientId;
+    document.getElementById('edit-client-form').action = '/client/' + clientId + '/modifier';
+    document.getElementById('edit-client-name').value = name;
+    document.getElementById('edit-client-dialog').style.display = 'flex';
+    setTimeout(function() { document.getElementById('edit-client-name').focus(); }, 100);
+}
+
+function confirmDeleteClient() {
+    if (!_editClientId) return;
+    if (!confirm('Supprimer ce client et TOUS ses projets ?\nCette action est irreversible.')) return;
     var form = document.createElement('form');
     form.method = 'POST';
-    form.action = '/projet/' + _editProjectId + '/supprimer';
+    form.action = '/client/' + _editClientId + '/supprimer';
+    document.body.appendChild(form);
+    form.submit();
+}
+
+/* --- Modification projet --- */
+function showEditProjectDialog(clientId, projectId, name) {
+    _editProjectClientId = clientId;
+    _editProjectId = projectId;
+    document.getElementById('edit-project-form').action = '/client/' + clientId + '/projet/' + projectId + '/modifier';
+    document.getElementById('edit-project-name').value = name;
+    document.getElementById('edit-project-dialog').style.display = 'flex';
+    setTimeout(function() { document.getElementById('edit-project-name').focus(); }, 100);
+}
+
+function confirmDeleteProject() {
+    if (!_editProjectClientId || !_editProjectId) return;
+    if (!confirm('Supprimer ce projet ?\nToutes les donnees du projet seront perdues.')) return;
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/client/' + _editProjectClientId + '/projet/' + _editProjectId + '/supprimer';
     document.body.appendChild(form);
     form.submit();
 }

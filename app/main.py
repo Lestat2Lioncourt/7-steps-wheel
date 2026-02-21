@@ -9,7 +9,7 @@ import webbrowser
 import threading
 from pathlib import Path
 from flask import Flask
-from app.database.db import init_db, DATA_DIR
+from app.database.db import init_common, DATA_DIR
 
 HOST = "127.0.0.1"
 PORT = 5000
@@ -32,8 +32,8 @@ def create_app() -> Flask:
         secret_file.write_text(key, encoding="utf-8")
         application.secret_key = key
 
-    # Initialisation de la base au demarrage
-    init_db()
+    # Initialisation du schema common (tables de reference, seed)
+    init_common()
 
     # Enregistrement du blueprint principal
     from app.routes.main import main_bp

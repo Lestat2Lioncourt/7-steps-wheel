@@ -1,11 +1,22 @@
 """
-Blueprint principal : accueil, selection de projet, vues Globale, Categorie, Indicateur.
+Blueprint principal : accueil, selection client/projet, vues.
+Adapte pour PostgreSQL multi-client/multi-projet.
+Authentification par email + mot de passe, invitations, SSO Microsoft (optionnel).
 """
 
 from datetime import date
 from functools import wraps
 from flask import Blueprint, render_template, abort, request, jsonify, session, redirect, url_for
-from app.database.db import load_projects, get_project_by_id, set_active_project, get_active_db_path, get_connection, create_project, attach_project, update_project, delete_project, init_db
+from app.database.db import (
+    load_clients, get_client_by_id, get_client_by_schema,
+    create_client, update_client, delete_client,
+    load_projects, get_project_by_id, create_project, update_project, delete_project,
+    set_active_context, get_active_project_id,
+    get_connection, get_connection_common,
+    add_client_member,
+    migrate_client_schema,
+    BASE_DIR,
+)
 from app.services.indicateur_service import (
     get_global_data,
     get_categorie_data,
@@ -22,6 +33,7 @@ from app.services.action_service import (
     get_actions_for_indicator,
     get_actions_for_categorie,
     get_actions_for_global,
+    get_parent_breadcrumb,
     create_action,
     update_action_status,
     update_action,
@@ -30,18 +42,27 @@ from app.services.action_service import (
     KANBAN_LABELS,
 )
 from app.services.identity_service import (
-    detect_from_registry,
-    get_stored_identity,
-    save_identity,
-    clear_identity,
     ensure_user_in_db,
     add_user_to_project,
     suggest_trigramme,
     create_placeholder_user,
 )
+from app.services.auth_service import (
+    verify_password,
+    is_setup_needed,
+    create_initial_admin,
+    is_sso_enabled,
+    get_msal_auth_url,
+    complete_msal_flow,
+    find_user_by_email,
+    create_invitation,
+    validate_invitation,
+    consume_invitation,
+)
 from app.services.member_service import (
     get_all_members,
     add_member,
+    update_member,
     update_member_role,
     update_member_emails,
     update_member_date_fin,
@@ -50,15 +71,30 @@ from app.services.member_service import (
 
 main_bp = Blueprint('main', __name__)
 
+# Cache des schemas deja migres (evite de re-executer schema_client.sql a chaque requete)
+_migrated_schemas = set()
 
-def _activate_project(project):
-    """Active un projet (local ou distant) et applique les migrations si necessaire."""
-    if project.get('db_path'):
-        set_active_project(db_path=project['db_path'])
-    else:
-        set_active_project(db_file=project['db_file'])
-    # Appliquer les migrations sur la base du projet
-    init_db(get_active_db_path())
+
+def _activate_project(client_schema, project_id):
+    """Active un client + projet : positionne le contexte et applique les migrations si besoin."""
+    set_active_context(client_schema, project_id)
+    if client_schema not in _migrated_schemas:
+        migrate_client_schema(client_schema)
+        _migrated_schemas.add(client_schema)
+
+
+def _get_current_user_id():
+    """Retourne le user_id de l'utilisateur courant (depuis common.utilisateurs).
+    Ne cree pas de compte a la volee."""
+    conn = get_connection_common()
+    try:
+        row = conn.execute(
+            "SELECT id FROM utilisateurs WHERE login = %s",
+            (session['user_login'],)
+        ).fetchone()
+        return row['id'] if row else None
+    finally:
+        conn.close()
 
 
 def _resolve_role(result):
@@ -86,8 +122,17 @@ COL_LABEL = {
     'orange': 'Warning', 'red': 'Blocage'
 }
 
-# Routes exclues des guards
-_OPEN_ROUTES = ('main.accueil', 'main.select_project', 'main.create_project_route', 'main.attach_project_route', 'main.login', 'main.logout', 'main.api_trigramme_suggest', 'static')
+# Routes exclues des guards (pas besoin de client+projet actif)
+_OPEN_ROUTES = (
+    'main.accueil', 'main.select_project',
+    'main.create_client_route', 'main.create_project_route',
+    'main.update_client_route', 'main.delete_client_route',
+    'main.update_project_route', 'main.delete_project_route',
+    'main.login', 'main.logout',
+    'main.setup', 'main.invitation',
+    'main.sso_login', 'main.sso_callback',
+    'main.api_trigramme_suggest', 'static',
+)
 
 
 # -------------------------------------------------------------------
@@ -125,208 +170,365 @@ def require_admin_page(f):
 
 @main_bp.before_request
 def require_identity_and_project():
-    """Redirige vers login si pas identifie, puis vers accueil si pas de projet."""
+    """Redirige vers login si pas identifie, puis vers accueil si pas de client+projet."""
     if request.endpoint in _OPEN_ROUTES:
         return
     if request.endpoint and request.endpoint.startswith('static'):
         return
 
-    # 1. Identite requise
+    # 1. Identite requise (session uniquement, plus de fichier identity.json)
     if 'user_login' not in session:
-        # Tenter de restaurer depuis le fichier memorise
-        stored = get_stored_identity()
-        if stored:
-            session['user_login'] = stored['login']
-            session['user_nom'] = stored['nom']
-            session['user_email'] = stored.get('email', '')
-            session['user_trigramme'] = stored.get('trigramme', '')
-        else:
-            return redirect(url_for('main.login'))
+        return redirect(url_for('main.login'))
 
-    # 2. Projet actif requis
-    if 'project_id' not in session:
+    # 2. Client + Projet actif requis
+    if 'client_schema' not in session or 'project_id' not in session:
         return redirect(url_for('main.accueil'))
-    project = get_project_by_id(session['project_id'])
-    if project is None:
+
+    # 3. Verifier que le client existe
+    client = get_client_by_schema(session['client_schema'])
+    if not client:
+        session.pop('client_id', None)
+        session.pop('client_schema', None)
+        session.pop('client_name', None)
         session.pop('project_id', None)
         session.pop('project_name', None)
         return redirect(url_for('main.accueil'))
-    _activate_project(project)
 
-    # 3. Verifier que l'utilisateur est membre du projet
+    # 4. Activer le contexte (search_path + migration si besoin)
+    _activate_project(session['client_schema'], session['project_id'])
+
+    # 5. Verifier que le projet existe
+    project = get_project_by_id(session['project_id'])
+    if not project:
+        session.pop('project_id', None)
+        session.pop('project_name', None)
+        return redirect(url_for('main.accueil'))
+
+    # 6. Verifier que l'utilisateur est membre du projet
     role = _resolve_role(ensure_user_in_db(session['user_login'], session['user_nom'],
                              session.get('user_email', ''), session.get('user_trigramme', '')))
     if role is None or role == 'information':
         session.pop('project_id', None)
         session.pop('project_name', None)
         session.pop('user_role', None)
+        session.pop('user_real_role', None)
         error = 'info_only' if role == 'information' else 'non_membre'
         return redirect(url_for('main.accueil', error=error))
-    session['user_role'] = role
+    # Preserver le switch de role si actif (admin temporairement en mode membre)
+    if session.get('user_real_role') == 'admin' and role == 'admin':
+        pass  # Garder user_role tel quel (mode membre switche)
+    else:
+        session['user_role'] = role
+        session.pop('user_real_role', None)
 
 
+# -------------------------------------------------------------------
+# Login / Logout / Setup / Invitation / SSO
+# -------------------------------------------------------------------
 @main_bp.route('/login', methods=['GET', 'POST'])
 def login():
+    # Redirect vers setup si aucun utilisateur
+    if is_setup_needed():
+        return redirect(url_for('main.setup'))
+
     if request.method == 'POST':
         email = request.form.get('email', '').strip()
-        nom = request.form.get('nom', '').strip()
-        trigramme = request.form.get('trigramme', '').strip().upper()
-        if not email or not nom:
-            return render_template('login.html', accounts=[], prefill={'email': email, 'nom': nom, 'trigramme': trigramme},
-                                   detected=False, error='Email et nom requis.')
-        # login = partie avant @ de l'email
-        login_id = email.split('@')[0].lower()
-        identity = save_identity(login_id, nom, email, trigramme)
-        session['user_login'] = identity['login']
-        session['user_nom'] = identity['nom']
-        session['user_email'] = identity['email']
-        session['user_trigramme'] = identity.get('trigramme', '')
+        password = request.form.get('password', '').strip()
+        if not email or not password:
+            return render_template('login.html', error='Email et mot de passe requis.',
+                                   sso_available=is_sso_enabled(), prefill_email=email)
+
+        user = verify_password(email, password)
+        if not user:
+            return render_template('login.html', error='Identifiants incorrects.',
+                                   sso_available=is_sso_enabled(), prefill_email=email)
+
+        session['user_login'] = user['login']
+        session['user_nom'] = user['nom']
+        session['user_email'] = user['email']
+        session['user_trigramme'] = user['trigramme']
         return redirect(url_for('main.accueil'))
 
-    # GET: auto-login depuis fichier ou registre
-    stored = get_stored_identity()
-    if stored:
-        session['user_login'] = stored['login']
-        session['user_nom'] = stored['nom']
-        session['user_email'] = stored.get('email', '')
-        session['user_trigramme'] = stored.get('trigramme', '')
+    # GET : si deja connecte, aller a l'accueil
+    if 'user_login' in session:
         return redirect(url_for('main.accueil'))
 
-    accounts = detect_from_registry()
-    if len(accounts) == 1:
-        # Un seul compte detecte → connexion automatique
-        email = accounts[0]['email']
-        nom = accounts[0].get('nom', email.split('@')[0])
-        login_id = email.split('@')[0].lower()
-        trigramme = suggest_trigramme(nom)
-        identity = save_identity(login_id, nom, email, trigramme)
-        session['user_login'] = identity['login']
-        session['user_nom'] = identity['nom']
-        session['user_email'] = identity['email']
-        session['user_trigramme'] = identity.get('trigramme', '')
-        return redirect(url_for('main.accueil'))
-
-    if len(accounts) > 1:
-        # Plusieurs comptes → ecran de selection
-        return render_template('login.html', accounts=accounts, prefill={}, detected=False, error=None)
-
-    # Aucun compte detecte → formulaire manuel
-    return render_template('login.html', accounts=[], prefill={}, detected=False, error=None)
+    return render_template('login.html', error=None,
+                           sso_available=is_sso_enabled(), prefill_email='')
 
 
 @main_bp.route('/logout')
 def logout():
-    clear_identity()
     session.clear()
     return redirect(url_for('main.login'))
 
 
+@main_bp.route('/setup', methods=['GET', 'POST'])
+def setup():
+    """Wizard de creation du premier administrateur."""
+    if not is_setup_needed():
+        return redirect(url_for('main.login'))
+
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        nom = request.form.get('nom', '').strip()
+        trigramme = request.form.get('trigramme', '').strip().upper()
+        password = request.form.get('password', '').strip()
+        password2 = request.form.get('password2', '').strip()
+
+        error = None
+        if not email or not nom or not password:
+            error = 'Tous les champs sont requis.'
+        elif len(password) < 6:
+            error = 'Le mot de passe doit contenir au moins 6 caracteres.'
+        elif password != password2:
+            error = 'Les mots de passe ne correspondent pas.'
+
+        if error:
+            return render_template('setup.html', error=error,
+                                   prefill={'email': email, 'nom': nom, 'trigramme': trigramme})
+
+        user = create_initial_admin(email, nom, trigramme, password)
+        session['user_login'] = user['login']
+        session['user_nom'] = user['nom']
+        session['user_email'] = user['email'] or ''
+        session['user_trigramme'] = user['trigramme'] or ''
+        return redirect(url_for('main.accueil'))
+
+    return render_template('setup.html', error=None, prefill={})
+
+
+@main_bp.route('/invitation/<token>', methods=['GET', 'POST'])
+def invitation(token):
+    """Activation de compte par lien d'invitation."""
+    inv = validate_invitation(token)
+
+    if request.method == 'POST':
+        if not inv:
+            return render_template('invitation.html', valid=False)
+
+        nom = request.form.get('nom', '').strip()
+        trigramme = request.form.get('trigramme', '').strip().upper()
+        password = request.form.get('password', '').strip()
+        password2 = request.form.get('password2', '').strip()
+
+        error = None
+        if not password:
+            error = 'Le mot de passe est requis.'
+        elif len(password) < 6:
+            error = 'Le mot de passe doit contenir au moins 6 caracteres.'
+        elif password != password2:
+            error = 'Les mots de passe ne correspondent pas.'
+
+        if error:
+            return render_template('invitation.html', valid=True, inv=inv, error=error,
+                                   prefill={'nom': nom, 'trigramme': trigramme})
+
+        user = consume_invitation(inv['id'], password, nom=nom or None, trigramme=trigramme or None)
+        if user:
+            session['user_login'] = user['login']
+            session['user_nom'] = user['nom']
+            session['user_email'] = user['email'] or ''
+            session['user_trigramme'] = user['trigramme'] or ''
+            return redirect(url_for('main.accueil'))
+
+        return render_template('invitation.html', valid=False)
+
+    # GET
+    if not inv:
+        return render_template('invitation.html', valid=False)
+    return render_template('invitation.html', valid=True, inv=inv, error=None, prefill={})
+
+
+# --- SSO Microsoft ---
+@main_bp.route('/sso/login')
+def sso_login():
+    """Initie le flow OAuth2 Microsoft."""
+    if not is_sso_enabled():
+        return redirect(url_for('main.login'))
+    redirect_uri = url_for('main.sso_callback', _external=True)
+    auth_url, flow = get_msal_auth_url(redirect_uri)
+    if not auth_url:
+        return redirect(url_for('main.login'))
+    session['sso_flow'] = flow
+    return redirect(auth_url)
+
+
+@main_bp.route('/sso/callback')
+def sso_callback():
+    """Callback OAuth2 Microsoft."""
+    if not is_sso_enabled():
+        return redirect(url_for('main.login'))
+    flow = session.pop('sso_flow', None)
+    if not flow:
+        return redirect(url_for('main.login'))
+
+    claims = complete_msal_flow(flow, request.args)
+    if not claims:
+        return redirect(url_for('main.login'))
+
+    email = claims.get('preferred_username', '').lower()
+    if not email:
+        return redirect(url_for('main.login'))
+
+    user = find_user_by_email(email)
+    if not user:
+        return render_template('login.html', error='Aucun compte associe a cet email Microsoft.',
+                               sso_available=True, prefill_email=email)
+
+    session['user_login'] = user['login']
+    session['user_nom'] = user['nom']
+    session['user_email'] = user['email'] or ''
+    session['user_trigramme'] = user['trigramme'] or ''
+    return redirect(url_for('main.accueil'))
+
+
+# -------------------------------------------------------------------
+# Accueil : liste des clients et projets
+# -------------------------------------------------------------------
 @main_bp.route('/')
 def accueil():
-    # Si pas identifie, renvoyer au login
     if 'user_login' not in session:
-        stored = get_stored_identity()
-        if stored:
-            session['user_login'] = stored['login']
-            session['user_nom'] = stored['nom']
-            session['user_email'] = stored.get('email', '')
-            session['user_trigramme'] = stored.get('trigramme', '')
-        else:
-            return redirect(url_for('main.login'))
+        return redirect(url_for('main.login'))
 
-    projects = load_projects()
-    return render_template('accueil.html', projects=projects,
+    # Charger tous les clients et leurs projets
+    clients = load_clients()
+    for c in clients:
+        c['projects'] = load_projects(c['schema_name'])
+
+    return render_template('accueil.html', clients=clients,
                            user_nom=session.get('user_nom', ''))
 
 
-@main_bp.route('/projet/nouveau', methods=['POST'])
-def create_project_route():
+# -------------------------------------------------------------------
+# Gestion des clients
+# -------------------------------------------------------------------
+@main_bp.route('/client/nouveau', methods=['POST'])
+def create_client_route():
     name = request.form.get('name', '').strip()
     if not name:
         return redirect(url_for('main.accueil'))
-    project = create_project(name)
-    # Selectionner le nouveau projet directement
-    _activate_project(project)
-    session['project_id'] = project['id']
-    session['project_name'] = project['name']
-    # Le createur est automatiquement admin
+    client = create_client(name)
+    # Ajouter le createur comme admin du client
+    user_id = _get_current_user_id()
+    if user_id:
+        add_client_member(client['id'], user_id, 'admin')
+    return redirect(url_for('main.accueil'))
+
+
+@main_bp.route('/client/<int:client_id>/modifier', methods=['POST'])
+def update_client_route(client_id):
+    name = request.form.get('name', '').strip()
+    if not name:
+        return redirect(url_for('main.accueil'))
+    update_client(client_id, nom=name)
+    if session.get('client_id') == client_id:
+        session['client_name'] = name
+    return redirect(url_for('main.accueil'))
+
+
+@main_bp.route('/client/<int:client_id>/supprimer', methods=['POST'])
+def delete_client_route(client_id):
+    delete_client(client_id)
+    if session.get('client_id') == client_id:
+        session.pop('client_id', None)
+        session.pop('client_schema', None)
+        session.pop('client_name', None)
+        session.pop('project_id', None)
+        session.pop('project_name', None)
+    return redirect(url_for('main.accueil'))
+
+
+# -------------------------------------------------------------------
+# Gestion des projets
+# -------------------------------------------------------------------
+@main_bp.route('/client/<int:client_id>/projet/nouveau', methods=['POST'])
+def create_project_route(client_id):
+    name = request.form.get('name', '').strip()
+    if not name:
+        return redirect(url_for('main.accueil'))
+
+    client = get_client_by_id(client_id)
+    if not client:
+        return redirect(url_for('main.accueil'))
+
+    project = create_project(name, client['schema_name'])
+
+    # Activer le contexte pour le nouveau projet
+    _activate_project(client['schema_name'], project['id'])
+
+    # Le createur est automatiquement admin du projet
     add_user_to_project(session['user_login'], session['user_nom'],
                         session.get('user_email', ''), session.get('user_trigramme', ''),
                         role='admin')
+
+    session['client_id'] = client_id
+    session['client_schema'] = client['schema_name']
+    session['client_name'] = client['nom']
+    session['project_id'] = project['id']
+    session['project_name'] = project['nom']
     session['user_role'] = 'admin'
     return redirect(url_for('main.vue_globale'))
 
 
-@main_bp.route('/projet/rattacher', methods=['POST'])
-def attach_project_route():
-    name = request.form.get('name', '').strip()
-    path = request.form.get('path', '').strip()
-    if not name or not path:
-        return redirect(url_for('main.accueil'))
-    try:
-        project = attach_project(name, path)
-    except FileNotFoundError:
-        # Recharger l'accueil avec un message d'erreur
-        projects = load_projects()
-        return render_template('accueil.html', projects=projects,
-                               user_nom=session.get('user_nom', ''),
-                               attach_error=f'Fichier introuvable : {path}')
-    _activate_project(project)
-    session['project_id'] = project['id']
-    session['project_name'] = project['name']
-    # Verifier si deja membre, sinon ajouter comme admin
+@main_bp.route('/client/<int:client_id>/projet/<int:project_id>')
+def select_project(client_id, project_id):
+    client = get_client_by_id(client_id)
+    if not client:
+        abort(404)
+    project = get_project_by_id(project_id, client['schema_name'])
+    if not project:
+        abort(404)
+
+    _activate_project(client['schema_name'], project_id)
+
+    # Verifier si l'utilisateur est membre
     role = _resolve_role(ensure_user_in_db(session['user_login'], session['user_nom'],
                              session.get('user_email', ''), session.get('user_trigramme', '')))
     if role is None:
-        add_user_to_project(session['user_login'], session['user_nom'],
-                            session.get('user_email', ''), session.get('user_trigramme', ''),
-                            role='admin')
-        role = 'admin'
+        return redirect(url_for('main.accueil', error='non_membre'))
+
+    session['client_id'] = client_id
+    session['client_schema'] = client['schema_name']
+    session['client_name'] = client['nom']
+    session['project_id'] = project_id
+    session['project_name'] = project['nom']
     session['user_role'] = role
     return redirect(url_for('main.vue_globale'))
 
 
-@main_bp.route('/projet/<project_id>/modifier', methods=['POST'])
-def update_project_route(project_id):
+@main_bp.route('/client/<int:client_id>/projet/<int:project_id>/modifier', methods=['POST'])
+def update_project_route(client_id, project_id):
     name = request.form.get('name', '').strip()
     if not name:
         return redirect(url_for('main.accueil'))
-    update_project(project_id, name=name)
+    client = get_client_by_id(client_id)
+    if not client:
+        return redirect(url_for('main.accueil'))
+    update_project(project_id, nom=name, client_schema=client['schema_name'])
+    if session.get('project_id') == project_id:
+        session['project_name'] = name
     return redirect(url_for('main.accueil'))
 
 
-@main_bp.route('/projet/<project_id>/supprimer', methods=['POST'])
-def delete_project_route(project_id):
-    delete_project(project_id)
-    # Si le projet supprime etait le projet actif, nettoyer la session
+@main_bp.route('/client/<int:client_id>/projet/<int:project_id>/supprimer', methods=['POST'])
+def delete_project_route(client_id, project_id):
+    client = get_client_by_id(client_id)
+    if client:
+        delete_project(project_id, client_schema=client['schema_name'])
     if session.get('project_id') == project_id:
         session.pop('project_id', None)
         session.pop('project_name', None)
     return redirect(url_for('main.accueil'))
 
 
-@main_bp.route('/projet/<project_id>')
-def select_project(project_id):
-    project = get_project_by_id(project_id)
-    if project is None:
-        abort(404)
-    _activate_project(project)
-    # Verifier si l'utilisateur est membre
-    role = _resolve_role(ensure_user_in_db(session['user_login'], session['user_nom'],
-                             session.get('user_email', ''), session.get('user_trigramme', '')))
-    if role is None:
-        return redirect(url_for('main.accueil', error='non_membre'))
-    session['project_id'] = project['id']
-    session['project_name'] = project['name']
-    session['user_role'] = role
-    return redirect(url_for('main.vue_globale'))
-
-
+# -------------------------------------------------------------------
+# Vues metier : Global, Categorie, Indicateur, Referentiel
+# -------------------------------------------------------------------
 @main_bp.route('/global')
 def vue_globale():
     data = get_global_data()
     drill_data = get_global_drill_data()
-    # Layer values for global layer at each step
     global_layer_values = {}
     for step_num in range(1, 8):
         global_layer_values[step_num] = get_step_layer_values(step_num)
@@ -406,7 +608,7 @@ def save_step():
     context = d.get('context')
     etape = d.get('etape')
     layer = d.get('layer')
-    color = d.get('color')  # 'green', 'red', ... or None
+    color = d.get('color')
     commentaire = d.get('commentaire', '')
     indicateur_id = d.get('indicateur_id')
     categorie_id = d.get('categorie_id')
@@ -443,7 +645,7 @@ def _kanban_common():
         conn.close()
 
 
-def _render_kanban(data, actions, kanban_level, etapes):
+def _render_kanban(data, actions, kanban_level, etapes, parent_id=None, parent_breadcrumb=None):
     return render_template(
         'kanban.html',
         data=data,
@@ -457,32 +659,43 @@ def _render_kanban(data, actions, kanban_level, etapes):
         COL=COL,
         COL_LABEL=COL_LABEL,
         project_name=session.get('project_name', 'ROUE CSI'),
+        parent_id=parent_id,
+        parent_breadcrumb=parent_breadcrumb or [],
     )
 
 
 @main_bp.route('/global/kanban')
 def vue_kanban_global():
+    parent_id = request.args.get('parent', type=int)
     data = get_global_data()
-    actions = get_actions_for_global()
-    return _render_kanban(data, actions, 'global', _kanban_common())
+    actions = get_actions_for_global(parent_id=parent_id)
+    breadcrumb = get_parent_breadcrumb(parent_id) if parent_id else []
+    return _render_kanban(data, actions, 'global', _kanban_common(),
+                          parent_id=parent_id, parent_breadcrumb=breadcrumb)
 
 
 @main_bp.route('/categorie/<int:id>/kanban')
 def vue_kanban_categorie(id):
+    parent_id = request.args.get('parent', type=int)
     data = get_categorie_data(id)
     if data is None:
         abort(404)
-    actions = get_actions_for_categorie(id)
-    return _render_kanban(data, actions, 'categorie', _kanban_common())
+    actions = get_actions_for_categorie(id, parent_id=parent_id)
+    breadcrumb = get_parent_breadcrumb(parent_id) if parent_id else []
+    return _render_kanban(data, actions, 'categorie', _kanban_common(),
+                          parent_id=parent_id, parent_breadcrumb=breadcrumb)
 
 
 @main_bp.route('/indicateur/<int:id>/kanban')
 def vue_kanban(id):
+    parent_id = request.args.get('parent', type=int)
     data = get_indicateur_data(id)
     if data is None:
         abort(404)
-    actions = get_actions_for_indicator(id, data['categorie']['id'])
-    return _render_kanban(data, actions, 'indicateur', _kanban_common())
+    actions = get_actions_for_indicator(id, data['categorie']['id'], parent_id=parent_id)
+    breadcrumb = get_parent_breadcrumb(parent_id) if parent_id else []
+    return _render_kanban(data, actions, 'indicateur', _kanban_common(),
+                          parent_id=parent_id, parent_breadcrumb=breadcrumb)
 
 
 @main_bp.route('/api/action/create', methods=['POST'])
@@ -494,6 +707,9 @@ def api_action_create():
     # Si assignee_login contient @ → creer un placeholder
     if '@' in d['assignee_login']:
         d['assignee_login'] = create_placeholder_user(d['assignee_login'])
+    # parent_id pour sous-taches
+    if d.get('parent_id'):
+        d['parent_id'] = int(d['parent_id'])
     try:
         action_id = create_action(d)
         return jsonify({'ok': True, 'id': action_id})
@@ -521,7 +737,6 @@ def api_action_update(id):
     d = request.get_json()
     if not d or not d.get('titre') or not d.get('assignee_login') or not d.get('etape'):
         return jsonify({'ok': False, 'error': 'Missing parameters'}), 400
-    # Si assignee_login contient @ → creer un placeholder
     if '@' in d['assignee_login']:
         d['assignee_login'] = create_placeholder_user(d['assignee_login'])
     try:
@@ -544,20 +759,28 @@ def api_action_delete(id):
 @main_bp.route('/api/users/search')
 def api_users_search():
     q = request.args.get('q', '').strip()
+    projet_id = get_active_project_id()
     conn = get_connection()
     try:
         if q:
             like = f"%{q}%"
-            users = conn.execute(
-                """SELECT login, nom, email, trigramme FROM utilisateurs
-                   WHERE login LIKE ? OR nom LIKE ? OR email LIKE ? OR trigramme LIKE ?
-                   ORDER BY nom LIMIT 20""",
-                (like, like, like, like),
-            ).fetchall()
+            users = conn.execute("""
+                SELECT u.login, u.nom, u.email, u.trigramme
+                FROM utilisateurs u
+                JOIN projet_membres pm ON pm.user_id = u.id
+                WHERE pm.projet_id = %s
+                    AND (u.login ILIKE %s OR u.nom ILIKE %s
+                         OR u.email ILIKE %s OR u.trigramme ILIKE %s)
+                ORDER BY u.nom LIMIT 20
+            """, (projet_id, like, like, like, like)).fetchall()
         else:
-            users = conn.execute(
-                "SELECT login, nom, email, trigramme FROM utilisateurs ORDER BY nom LIMIT 20"
-            ).fetchall()
+            users = conn.execute("""
+                SELECT u.login, u.nom, u.email, u.trigramme
+                FROM utilisateurs u
+                JOIN projet_membres pm ON pm.user_id = u.id
+                WHERE pm.projet_id = %s
+                ORDER BY u.nom LIMIT 20
+            """, (projet_id,)).fetchall()
         return jsonify({'users': [dict(u) for u in users]})
     finally:
         conn.close()
@@ -573,12 +796,8 @@ def api_trigramme_suggest():
 # Gestion des membres
 # -------------------------------------------------------------------
 @main_bp.route('/membres')
-@require_admin_page
 def vue_membres():
-    from app.database.db import get_active_db_path, BASE_DIR
     members = get_all_members()
-    db_path = get_active_db_path()
-    app_path = str(BASE_DIR / 'start.py')
     return render_template(
         'membres.html',
         members=members,
@@ -587,8 +806,7 @@ def vue_membres():
         COL=COL,
         COL_LABEL=COL_LABEL,
         project_name=session.get('project_name', 'ROUE CSI'),
-        db_path=str(db_path) if db_path else '',
-        app_path=app_path,
+        client_name=session.get('client_name', ''),
     )
 
 
@@ -653,3 +871,51 @@ def api_remove_member(id):
         return jsonify({'ok': True})
     except ValueError as e:
         return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+@main_bp.route('/api/membres/<int:id>', methods=['PUT'])
+@require_admin
+def api_update_member(id):
+    data = request.get_json(force=True)
+    try:
+        update_member(id, data)
+        return jsonify({'ok': True})
+    except ValueError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+@main_bp.route('/api/membres/<int:id>/invitation', methods=['POST'])
+@require_admin
+def api_generate_invitation(id):
+    """Genere un lien d'invitation pour un membre."""
+    projet_id = get_active_project_id()
+    conn = get_connection()
+    try:
+        pm = conn.execute(
+            "SELECT user_id FROM projet_membres WHERE id = %s AND projet_id = %s",
+            (id, projet_id)
+        ).fetchone()
+        if not pm:
+            return jsonify({'ok': False, 'error': 'Membre introuvable.'}), 404
+        user_id = pm['user_id']
+    finally:
+        conn.close()
+
+    created_by = _get_current_user_id()
+    token = create_invitation(user_id, created_by)
+    inv_url = url_for('main.invitation', token=token, _external=True)
+    return jsonify({'ok': True, 'url': inv_url})
+
+
+@main_bp.route('/api/switch-role', methods=['POST'])
+def api_switch_role():
+    real_role = session.get('user_real_role') or session.get('user_role')
+    if real_role != 'admin':
+        return jsonify({'ok': False, 'error': 'Reserve aux administrateurs'}), 403
+    current = session.get('user_role')
+    if current == 'admin':
+        session['user_real_role'] = 'admin'
+        session['user_role'] = 'membre'
+    else:
+        session['user_role'] = session.pop('user_real_role', 'admin')
+    return jsonify({'ok': True, 'role': session['user_role']})
