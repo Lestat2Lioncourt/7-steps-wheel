@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Roue CSI - Membres{% endblock %}
+
+{% block breadcrumb %}
+<span class="current">Membres</span>
+{% endblock %}
+
+{% block sidebar %}
+<div class="sidebar-section">
+    <h4>Projet</h4>
+    <div style="padding:5px 9px;font-size:12px;color:#ccc">{{ project_name }}</div>
+    <div style="padding:2px 9px;font-size:10px;color:#555">{{ members|length }} membre{{ 's' if members|length > 1 else '' }}</div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="view-header">
+    <div>
+        <h2>Membres du projet</h2>
+        <div class="subtitle">Gestion des acces et des roles</div>
+    </div>
+    <button class="kanban-new-btn" onclick="openAddMemberModal()">+ Ajouter un membre</button>
+    <button class="btn btn-secondary" onclick="copyInvitation()" title="Copier le lien d'invitation dans le presse-papiers">Copier l'invitation</button>
+</div>
+
+<div class="table-area">
+    <table class="ref-table" id="members-table">
+        <thead>
+            <tr>
+                <th>Trigramme</th>
+                <th>Nom</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in members %}
+            <tr data-id="{{ m.id }}">
+                <td>
+                    {% if m.trigramme %}
+                    <span class="card-tri">{{ m.trigramme }}</span>
+                    {% else %}
+                    <span style="color:#555">-</span>
+                    {% endif %}
+                </td>
+                <td>{{ m.nom }}</td>
+                <td style="color:#888;font-size:11px">{{ m.email or '-' }}</td>
+                <td>
+                    <select class="role-select" data-id="{{ m.id }}" onchange="changeRole({{ m.id }}, this.value)">
+                        <option value="admin"{% if m.role == 'admin' %} selected{% endif %}>Admin</option>
+                        <option value="membre"{% if m.role == 'membre' %} selected{% endif %}>Membre</option>
+                        <option value="lecteur"{% if m.role == 'lecteur' %} selected{% endif %}>Lecteur</option>
+                        <option value="information"{% if m.role == 'information' %} selected{% endif %}>Information</option>
+                    </select>
+                </td>
+                <td>
+                    {% if m.login != session.get('user_login') %}
+                    <button class="btn-clear" style="padding:4px 10px;font-size:10px" onclick="removeMember({{ m.id }}, '{{ m.nom }}')">Retirer</button>
+                    {% else %}
+                    <span style="color:#555;font-size:10px">vous</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modale ajout membre -->
+<div class="kanban-modal-overlay" id="add-member-overlay" onclick="if(event.target===this)closeAddMemberModal()">
+    <div class="kanban-modal">
+        <h3>Ajouter un membre</h3>
+        <form id="add-member-form" onsubmit="event.preventDefault();submitAddMember()">
+            <div class="form-group">
+                <label for="am-email">Email</label>
+                <input class="form-input" type="email" id="am-email" required placeholder="prenom.nom@example.com">
+            </div>
+            <div class="form-group">
+                <label for="am-nom">Nom</label>
+                <input class="form-input" type="text" id="am-nom" required placeholder="NOM, Prenom"
+                       oninput="suggestTrigramme()">
+            </div>
+            <div class="form-group">
+                <label for="am-trigramme">Trigramme</label>
+                <input class="form-input" type="text" id="am-trigramme" placeholder="ABC" maxlength="4" style="width:80px">
+            </div>
+            <div class="form-group">
+                <label for="am-role">Role</label>
+                <select class="form-input" id="am-role" style="width:150px">
+                    <option value="membre" selected>Membre</option>
+                    <option value="lecteur">Lecteur</option>
+                    <option value="information">Information</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeAddMemberModal()">Annuler</button>
+                <button type="submit" class="btn btn-primary">Ajouter</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    window._projectName = {{ project_name|tojson }};
+    window._dbPath = {{ db_path|tojson }};
+    window._appPath = {{ app_path|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/membres.js') }}"></script>
+{% endblock %}

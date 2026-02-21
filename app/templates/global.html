@@ -29,7 +29,7 @@
     <a class="kanban-new-btn" href="{{ url_for('main.vue_kanban_global') }}" style="text-decoration:none">Actions (Kanban)</a>
 </div>
 <div class="wheel-area">
-    <svg id="wh-global" width="440" height="440" viewBox="0 0 440 440"></svg>
+    <svg id="wh-global" width="800" height="490" viewBox="0 0 800 490"></svg>
     <div class="right-panels">
         <div id="sp-global"></div>
     </div>
@@ -46,11 +46,29 @@
     var drillData = {{ drill_data|tojson }};
     var globalLayerValues = {{ global_layer_values|tojson }};
 
-    drawSimpleWheel('wh-global', wheelColors, {
-        c1: 'VUE GLOBALE',
-        c2: '{{ data.total }} indicateurs',
+    // Reformater globalLayerValues en stepData pour drawIndicatorWheel
+    var globalStepData = [];
+    for (var i = 0; i < 7; i++) {
+        var lv = globalLayerValues[i + 1] || {color: null, comment: ''};
+        globalStepData.push({
+            global: (lv.color || lv.comment) ? lv : null,
+            categorie: null,
+            indicateur: null
+        });
+    }
+
+    drawIndicatorWheel('wh-global', globalStepData, {
+        centerCode: 'VUE GLOBALE',
+        centerDate: '{{ data.total }} indicateurs',
+        wheelColors: wheelColors,
         onClick: function(idx) {
             showGlobalDrill(idx, drillData, globalLayerValues);
+        },
+        onCommentClick: function(idx) {
+            var etape = idx + 1;
+            openModal(idx, 'global', {
+                layerValues: {global: globalLayerValues[etape] || {color: null, comment: ''}}
+            });
         }
     });
 

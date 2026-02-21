@@ -10,15 +10,34 @@
 
 <div class="accueil-container">
     <h1 class="accueil-title">Identification</h1>
-    {% if detected %}
-    <p class="accueil-subtitle">Identite detectee depuis votre session Windows</p>
-    {% else %}
-    <p class="accueil-subtitle">Saisissez vos informations pour continuer</p>
-    {% endif %}
 
     {% if error %}
     <p style="color:#dc2626;font-size:13px">{{ error }}</p>
     {% endif %}
+
+    {% if accounts and accounts|length > 1 %}
+    {# Plusieurs comptes O365 detectes — choix #}
+    <p class="accueil-subtitle">Plusieurs comptes O365 detectes sur ce poste</p>
+    <p class="accueil-subtitle">Selectionnez le compte a utiliser</p>
+    <div class="project-cards">
+        {% for acc in accounts %}
+        <form method="POST" style="display:contents">
+            <input type="hidden" name="email" value="{{ acc.email }}">
+            <input type="hidden" name="nom" value="{{ acc.nom }}">
+            <input type="hidden" name="trigramme" value="">
+            <button type="submit" class="project-card" style="border:none;text-align:center">
+                <div class="project-card-name" style="font-size:14px">{{ acc.nom }}</div>
+                <div class="project-card-file">{{ acc.email }}</div>
+                <div class="project-card-btn">Utiliser ce compte</div>
+            </button>
+        </form>
+        {% endfor %}
+    </div>
+
+    {% else %}
+    {# Aucun compte detecte — formulaire manuel #}
+    <p class="accueil-subtitle">Votre identite Windows n'a pas pu etre detectee automatiquement.</p>
+    <p class="accueil-subtitle">Saisissez vos informations pour continuer</p>
 
     <form method="POST" class="login-form">
         <div class="login-field">
@@ -50,6 +69,7 @@
     (function() {
         var nomInput = document.getElementById('nom');
         var triInput = document.getElementById('trigramme');
+        if (!nomInput || !triInput) return;
         var userEdited = false;
         triInput.addEventListener('input', function() { userEdited = true; });
 
@@ -62,12 +82,12 @@
                 .then(function(d) { if (!userEdited) triInput.value = d.trigramme; });
         });
 
-        // Auto-suggest on load if nom is pre-filled
         if (nomInput.value.trim() && !triInput.value) {
             nomInput.dispatchEvent(new Event('input'));
         }
     })();
     </script>
+    {% endif %}
 </div>
 
 </body>

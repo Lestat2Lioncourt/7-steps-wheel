@@ -99,6 +99,51 @@ def init_db(db_path: str | Path = DB_PATH, force: bool = False) -> None:
                         print(f"Migration : colonne '{col_name}' ajoutee a utilisateurs")
                     except sqlite3.OperationalError:
                         pass  # colonne deja ajoutee par un autre processus
+            # Migration : ajouter date_debut/date_fin a actions si absentes
+            action_cols = {row["name"] for row in conn.execute("PRAGMA table_info(actions)").fetchall()}
+            for col_name in ("date_debut", "date_fin"):
+                if col_name not in action_cols:
+                    try:
+                        conn.execute(f"ALTER TABLE actions ADD COLUMN {col_name} TEXT")
+                        print(f"Migration : colonne '{col_name}' ajoutee a actions")
+                    except sqlite3.OperationalError:
+                        pass
+
+            # Migration : renommer role 'intervenant' -> 'membre' + ajouter 'lecteur'
+            schema_sql = conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='utilisateurs'"
+            ).fetchone()
+            needs_rebuild = False
+            rename_intervenant = False
+            if schema_sql and 'intervenant' in schema_sql[0]:
+                needs_rebuild = True
+                rename_intervenant = True
+            elif schema_sql and 'information' not in schema_sql[0]:
+                needs_rebuild = True
+
+            if needs_rebuild:
+                role_expr = ("CASE WHEN role = 'intervenant' THEN 'membre' ELSE role END"
+                             if rename_intervenant else "role")
+                conn.executescript(f"""
+                    PRAGMA foreign_keys = OFF;
+                    DROP TABLE IF EXISTS utilisateurs_new;
+                    CREATE TABLE utilisateurs_new (
+                        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                        login       TEXT UNIQUE NOT NULL,
+                        nom         TEXT NOT NULL,
+                        email       TEXT,
+                        trigramme   TEXT,
+                        role        TEXT NOT NULL CHECK (role IN ('admin', 'membre', 'lecteur', 'information'))
+                    );
+                    INSERT INTO utilisateurs_new (id, login, nom, email, trigramme, role)
+                        SELECT id, login, nom, email, trigramme, {role_expr}
+                        FROM utilisateurs;
+                    DROP TABLE utilisateurs;
+                    ALTER TABLE utilisateurs_new RENAME TO utilisateurs;
+                    PRAGMA foreign_keys = ON;
+                """)
+                print("Migration : table utilisateurs reconstruite (roles: admin/membre/lecteur/information)")
+
             conn.commit()
             print(f"Base existante : {db_path}")
     finally:

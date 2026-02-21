@@ -187,10 +187,10 @@ INSERT INTO indicateur_etapes (indicateur_id, etape, statut_global_id, commentai
 -- ============================================
 INSERT INTO utilisateurs (login, nom, email, trigramme, role) VALUES
 ('admin', 'Administrateur', NULL, 'ADM', 'admin'),
-('amin', 'KOUYATE, Amin', 'amin.kouyate@example.com', 'AKO', 'intervenant'),
-('pascal.g', 'GARNIER, Pascal', 'pascal.garnier@example.com', 'PGA', 'intervenant'),
-('gisele', 'MARTIN, Gisele', 'gisele.martin@example.com', 'GMA', 'intervenant'),
-('p.dupont', 'DUPONT, Pierre', 'p.dupont@example.com', 'PDU', 'intervenant');
+('amin', 'KOUYATE, Amin', 'amin.kouyate@example.com', 'AKO', 'membre'),
+('pascal.g', 'GARNIER, Pascal', 'pascal.garnier@example.com', 'PGA', 'membre'),
+('gisele', 'MARTIN, Gisele', 'gisele.martin@example.com', 'GMA', 'membre'),
+('p.dupont', 'DUPONT, Pierre', 'p.dupont@example.com', 'PDU', 'membre');
 
 -- ============================================
 -- Actions demo (liees a ITR_QUAL_REF_TECH id=1, cat SLA Transverse id=1)

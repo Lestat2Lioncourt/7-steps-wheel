@@ -51,7 +51,7 @@ CREATE TABLE utilisateurs (
     nom         TEXT NOT NULL,
     email       TEXT,
     trigramme   TEXT,
-    role        TEXT NOT NULL CHECK (role IN ('admin', 'intervenant'))
+    role        TEXT NOT NULL CHECK (role IN ('admin', 'membre', 'lecteur', 'information'))
 );
 
 CREATE TABLE categories (
@@ -99,6 +99,8 @@ CREATE TABLE actions (
     statut              TEXT NOT NULL DEFAULT 'a_faire'
                         CHECK (statut IN ('a_faire', 'en_cours', 'a_valider', 'termine', 'rejete')),
     commentaire         TEXT,
+    date_debut          TEXT,
+    date_fin            TEXT,
     cree_par            TEXT NOT NULL REFERENCES utilisateurs(login),
     date_creation       TEXT NOT NULL,
     date_modification   TEXT,

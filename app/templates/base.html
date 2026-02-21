@@ -14,6 +14,9 @@
     <div class="main-tabs">
         <a class="main-tab{% if active_tab == 'roue' %} active{% endif %}" href="{{ url_for('main.vue_globale') }}">{{ project_name }}</a>
         <a class="main-tab{% if active_tab == 'referentiel' %} active{% endif %}" href="{{ url_for('main.vue_referentiel') }}">Referentiel</a>
+        {% if session.get('user_role') == 'admin' %}
+        <a class="main-tab{% if active_tab == 'membres' %} active{% endif %}" href="{{ url_for('main.vue_membres') }}">Membres</a>
+        {% endif %}
     </div>
     <div class="topbar-right">
         <div class="inline-counters" id="counters"></div>
@@ -22,10 +25,10 @@
             <span class="current">Vue Globale</span>
             {% endblock %}
         </div>
-        <a class="user-badge" href="{{ url_for('main.logout') }}" title="Changer d'identite">
+        <span class="user-badge" title="{{ session.get('user_email', '') }}">
             <span class="user-avatar">{{ session.get('user_trigramme', '') or session.get('user_nom', '?')[:1] }}</span>
             <span>{{ session.get('user_nom', '') }}</span>
-        </a>
+        </span>
     </div>
 </div>
 
@@ -49,7 +52,6 @@
 <div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal">
         <h3 id="modal-title">Etape</h3>
-        <div class="modal-tabs" id="modal-tabs"></div>
         <div class="modal-note" id="modal-note"></div>
         <div class="color-picker" id="modal-colors">
             <div>
@@ -73,18 +75,26 @@
                 <span class="color-btn-label">Blocage</span>
             </div>
         </div>
-        <div class="modal-comment-label">Commentaire</div>
+        <div class="modal-tabs" id="modal-tabs"></div>
         <textarea class="modal-comment" id="modal-comment" placeholder="Commentaire..."></textarea>
         <div class="modal-actions">
+            {% if session.get('user_role') != 'lecteur' %}
             <button class="btn-clear" id="modal-clear" onclick="clearLayer()">Vider cette couche</button>
             <a class="btn-action-link" id="modal-action-link" style="display:none" onclick="goToKanbanNew()">+ Action</a>
             <span style="flex:1"></span>
             <button class="btn btn-secondary" onclick="closeModal()">Annuler</button>
             <button class="btn btn-primary" onclick="saveModal()">Enregistrer</button>
+            {% else %}
+            <span style="flex:1"></span>
+            <button class="btn btn-secondary" onclick="closeModal()">Fermer</button>
+            {% endif %}
         </div>
     </div>
 </div>
 
+<script>
+    window._userRole = '{{ session.get("user_role", "") }}';
+</script>
 <script src="{{ url_for('static', filename='js/wheel.js') }}"></script>
 <script>
     // Compteurs topbar

@@ -3,6 +3,7 @@ Blueprint principal : accueil, selection de projet, vues Globale, Categorie, Ind
 """
 
 from datetime import date
+from functools import wraps
 from flask import Blueprint, render_template, abort, request, jsonify, session, redirect, url_for
 from app.database.db import load_projects, get_project_by_id, set_active_project, get_connection, create_project, attach_project
 from app.services.indicateur_service import (
@@ -34,8 +35,15 @@ from app.services.identity_service import (
     save_identity,
     clear_identity,
     ensure_user_in_db,
+    add_user_to_project,
     suggest_trigramme,
     create_placeholder_user,
+)
+from app.services.member_service import (
+    get_all_members,
+    add_member,
+    update_member_role,
+    remove_member,
 )
 
 main_bp = Blueprint('main', __name__)
@@ -60,6 +68,39 @@ COL_LABEL = {
 
 # Routes exclues des guards
 _OPEN_ROUTES = ('main.accueil', 'main.select_project', 'main.create_project_route', 'main.attach_project_route', 'main.login', 'main.logout', 'main.api_trigramme_suggest', 'static')
+
+
+# -------------------------------------------------------------------
+# Decorateurs de controle d'acces
+# -------------------------------------------------------------------
+def require_write(f):
+    """Refuse l'acces en ecriture aux lecteurs (403 JSON)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if session.get('user_role') == 'lecteur':
+            return jsonify({'ok': False, 'error': 'Acces en lecture seule'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+def require_admin(f):
+    """Refuse l'acces si pas admin (403 JSON)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if session.get('user_role') != 'admin':
+            return jsonify({'ok': False, 'error': 'Acces reserve aux administrateurs'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+def require_admin_page(f):
+    """Refuse l'acces si pas admin (redirect pour pages HTML)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if session.get('user_role') != 'admin':
+            return redirect(url_for('main.vue_globale'))
+        return f(*args, **kwargs)
+    return decorated
 
 
 @main_bp.before_request
@@ -92,9 +133,16 @@ def require_identity_and_project():
         return redirect(url_for('main.accueil'))
     _activate_project(project)
 
-    # 3. S'assurer que l'utilisateur existe dans la DB du projet
-    ensure_user_in_db(session['user_login'], session['user_nom'],
-                      session.get('user_email', ''), session.get('user_trigramme', ''))
+    # 3. Verifier que l'utilisateur est membre du projet
+    role = ensure_user_in_db(session['user_login'], session['user_nom'],
+                             session.get('user_email', ''), session.get('user_trigramme', ''))
+    if role is None or role == 'information':
+        session.pop('project_id', None)
+        session.pop('project_name', None)
+        session.pop('user_role', None)
+        error = 'info_only' if role == 'information' else 'non_membre'
+        return redirect(url_for('main.accueil', error=error))
+    session['user_role'] = role
 
 
 @main_bp.route('/login', methods=['GET', 'POST'])
@@ -104,7 +152,7 @@ def login():
         nom = request.form.get('nom', '').strip()
         trigramme = request.form.get('trigramme', '').strip().upper()
         if not email or not nom:
-            return render_template('login.html', prefill={'email': email, 'nom': nom, 'trigramme': trigramme},
+            return render_template('login.html', accounts=[], prefill={'email': email, 'nom': nom, 'trigramme': trigramme},
                                    detected=False, error='Email et nom requis.')
         # login = partie avant @ de l'email
         login_id = email.split('@')[0].lower()
@@ -115,17 +163,35 @@ def login():
         session['user_trigramme'] = identity.get('trigramme', '')
         return redirect(url_for('main.accueil'))
 
-    # GET: pre-remplir depuis registre ou fichier
+    # GET: auto-login depuis fichier ou registre
     stored = get_stored_identity()
     if stored:
         session['user_login'] = stored['login']
         session['user_nom'] = stored['nom']
         session['user_email'] = stored.get('email', '')
+        session['user_trigramme'] = stored.get('trigramme', '')
         return redirect(url_for('main.accueil'))
 
-    detected = detect_from_registry()
-    return render_template('login.html', prefill=detected or {},
-                           detected=detected is not None, error=None)
+    accounts = detect_from_registry()
+    if len(accounts) == 1:
+        # Un seul compte detecte → connexion automatique
+        email = accounts[0]['email']
+        nom = accounts[0].get('nom', email.split('@')[0])
+        login_id = email.split('@')[0].lower()
+        trigramme = suggest_trigramme(nom)
+        identity = save_identity(login_id, nom, email, trigramme)
+        session['user_login'] = identity['login']
+        session['user_nom'] = identity['nom']
+        session['user_email'] = identity['email']
+        session['user_trigramme'] = identity.get('trigramme', '')
+        return redirect(url_for('main.accueil'))
+
+    if len(accounts) > 1:
+        # Plusieurs comptes → ecran de selection
+        return render_template('login.html', accounts=accounts, prefill={}, detected=False, error=None)
+
+    # Aucun compte detecte → formulaire manuel
+    return render_template('login.html', accounts=[], prefill={}, detected=False, error=None)
 
 
 @main_bp.route('/logout')
@@ -163,9 +229,11 @@ def create_project_route():
     _activate_project(project)
     session['project_id'] = project['id']
     session['project_name'] = project['name']
-    # S'assurer que l'utilisateur existe dans la nouvelle DB
-    ensure_user_in_db(session['user_login'], session['user_nom'],
-                      session.get('user_email', ''), session.get('user_trigramme', ''))
+    # Le createur est automatiquement admin
+    add_user_to_project(session['user_login'], session['user_nom'],
+                        session.get('user_email', ''), session.get('user_trigramme', ''),
+                        role='admin')
+    session['user_role'] = 'admin'
     return redirect(url_for('main.vue_globale'))
 
 
@@ -186,8 +254,15 @@ def attach_project_route():
     _activate_project(project)
     session['project_id'] = project['id']
     session['project_name'] = project['name']
-    ensure_user_in_db(session['user_login'], session['user_nom'],
-                      session.get('user_email', ''), session.get('user_trigramme', ''))
+    # Verifier si deja membre, sinon ajouter comme admin
+    role = ensure_user_in_db(session['user_login'], session['user_nom'],
+                             session.get('user_email', ''), session.get('user_trigramme', ''))
+    if role is None:
+        add_user_to_project(session['user_login'], session['user_nom'],
+                            session.get('user_email', ''), session.get('user_trigramme', ''),
+                            role='admin')
+        role = 'admin'
+    session['user_role'] = role
     return redirect(url_for('main.vue_globale'))
 
 
@@ -197,8 +272,14 @@ def select_project(project_id):
     if project is None:
         abort(404)
     _activate_project(project)
+    # Verifier si l'utilisateur est membre
+    role = ensure_user_in_db(session['user_login'], session['user_nom'],
+                             session.get('user_email', ''), session.get('user_trigramme', ''))
+    if role is None:
+        return redirect(url_for('main.accueil', error='non_membre'))
     session['project_id'] = project['id']
     session['project_name'] = project['name']
+    session['user_role'] = role
     return redirect(url_for('main.vue_globale'))
 
 
@@ -230,13 +311,16 @@ def vue_categorie(id):
         abort(404)
     drill_data = get_categorie_drill_data(id)
     cat_layer_values = {}
+    global_layer_values = {}
     for step_num in range(1, 8):
         cat_layer_values[step_num] = get_step_layer_values_cat(id, step_num)
+        global_layer_values[step_num] = get_step_layer_values(step_num)
     return render_template(
         'categorie.html',
         data=data,
         drill_data=drill_data,
         cat_layer_values=cat_layer_values,
+        global_layer_values=global_layer_values,
         active_tab='roue',
         global_counts=get_global_counts(),
         COL=COL,
@@ -277,6 +361,7 @@ def vue_referentiel():
 
 
 @main_bp.route('/api/step/save', methods=['POST'])
+@require_write
 def save_step():
     d = request.get_json()
     context = d.get('context')
@@ -362,6 +447,7 @@ def vue_kanban(id):
 
 
 @main_bp.route('/api/action/create', methods=['POST'])
+@require_write
 def api_action_create():
     d = request.get_json()
     if not d or not d.get('titre') or not d.get('assignee_login') or not d.get('etape'):
@@ -377,6 +463,7 @@ def api_action_create():
 
 
 @main_bp.route('/api/action/<int:id>/status', methods=['POST'])
+@require_write
 def api_action_status(id):
     d = request.get_json()
     new_status = d.get('statut') if d else None
@@ -390,6 +477,7 @@ def api_action_status(id):
 
 
 @main_bp.route('/api/action/<int:id>/update', methods=['POST'])
+@require_write
 def api_action_update(id):
     d = request.get_json()
     if not d or not d.get('titre') or not d.get('assignee_login') or not d.get('etape'):
@@ -405,6 +493,7 @@ def api_action_update(id):
 
 
 @main_bp.route('/api/action/<int:id>/delete', methods=['POST'])
+@require_write
 def api_action_delete(id):
     try:
         delete_action(id)
@@ -439,3 +528,70 @@ def api_users_search():
 def api_trigramme_suggest():
     nom = request.args.get('nom', '')
     return jsonify({'trigramme': suggest_trigramme(nom)})
+
+
+# -------------------------------------------------------------------
+# Gestion des membres
+# -------------------------------------------------------------------
+@main_bp.route('/membres')
+@require_admin_page
+def vue_membres():
+    from app.database.db import get_active_db_path, BASE_DIR
+    members = get_all_members()
+    db_path = get_active_db_path()
+    app_path = str(BASE_DIR / 'start.py')
+    return render_template(
+        'membres.html',
+        members=members,
+        active_tab='membres',
+        global_counts=get_global_counts(),
+        COL=COL,
+        COL_LABEL=COL_LABEL,
+        project_name=session.get('project_name', 'ROUE CSI'),
+        db_path=str(db_path) if db_path else '',
+        app_path=app_path,
+    )
+
+
+@main_bp.route('/api/membres/add', methods=['POST'])
+@require_admin
+def api_add_member():
+    d = request.get_json()
+    if not d or not d.get('email') or not d.get('nom'):
+        return jsonify({'ok': False, 'error': 'Email et nom requis'}), 400
+    email = d['email'].strip()
+    nom = d['nom'].strip()
+    trigramme = d.get('trigramme', '').strip().upper()
+    role = d.get('role', 'membre')
+    if role not in ('admin', 'membre', 'lecteur', 'information'):
+        return jsonify({'ok': False, 'error': 'Role invalide'}), 400
+    login = email.split('@')[0].lower()
+    try:
+        add_member(login, nom, email, trigramme, role)
+        return jsonify({'ok': True})
+    except ValueError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+@main_bp.route('/api/membres/<int:id>/role', methods=['POST'])
+@require_admin
+def api_change_role(id):
+    d = request.get_json()
+    new_role = d.get('role') if d else None
+    if not new_role:
+        return jsonify({'ok': False, 'error': 'Role requis'}), 400
+    try:
+        update_member_role(id, new_role)
+        return jsonify({'ok': True})
+    except ValueError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+@main_bp.route('/api/membres/<int:id>/remove', methods=['POST'])
+@require_admin
+def api_remove_member(id):
+    try:
+        remove_member(id, session.get('user_login', ''))
+        return jsonify({'ok': True})
+    except ValueError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400

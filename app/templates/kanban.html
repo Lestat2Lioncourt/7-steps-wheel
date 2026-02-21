@@ -100,7 +100,9 @@
         <div class="subtitle">{{ data.indicateur.description }}</div>
         {% endif %}
     </div>
+    {% if session.get('user_role') != 'lecteur' %}
     <button class="kanban-new-btn" onclick="openActionModal(null)">+ Nouvelle action</button>
+    {% endif %}
 </div>
 <div class="kanban-area">
     <div class="kanban-board">
@@ -119,6 +121,8 @@
                      data-assignee-tri="{{ a.assignee_trigramme or '' }}"
                      data-commentaire="{{ a.commentaire or '' }}"
                      data-description="{{ a.description or '' }}"
+                     data-date-debut="{{ a.date_debut or '' }}"
+                     data-date-fin="{{ a.date_fin or '' }}"
                      data-niveau="{{ a.niveau }}">
                     <div class="card-title">{{ a.titre }}</div>
                     <div class="card-meta">
@@ -126,6 +130,13 @@
                         {{ a.assignee_nom }}
                     </div>
                     <span class="card-step">{{ a.etape_nom }}</span>
+                    {% if a.date_debut or a.date_fin %}
+                    <div class="card-dates">
+                        {% if a.date_debut %}<span title="Debut">{{ a.date_debut }}</span>{% endif %}
+                        {% if a.date_debut and a.date_fin %}<span class="card-dates-sep">&rarr;</span>{% endif %}
+                        {% if a.date_fin %}<span title="Fin prev.">{{ a.date_fin }}</span>{% endif %}
+                    </div>
+                    {% endif %}
                     {% if a.niveau == 'categorie' and kanban_level != 'categorie' %}
                     <span class="cat-badge">C {{ a.categorie_nom }}</span>
                     {% endif %}
@@ -194,6 +205,16 @@
                        placeholder="Nom, login ou email...">
                 <input type="hidden" id="km-assignee" value="">
                 <div class="assignee-dropdown" id="km-assignee-dropdown"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group form-half">
+                    <label for="km-date-debut">Date debut</label>
+                    <input class="form-input" type="date" id="km-date-debut">
+                </div>
+                <div class="form-group form-half">
+                    <label for="km-date-fin">Date fin prev.</label>
+                    <input class="form-input" type="date" id="km-date-fin">
+                </div>
             </div>
             <div class="form-group">
                 <label for="km-commentaire">Commentaire</label>

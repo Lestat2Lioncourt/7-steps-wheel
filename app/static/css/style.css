@@ -186,6 +186,11 @@ body {
 .comment-text { fill: #bbb; font-size: 10px; }
 .comment-step-label { fill: #a0c4ff; font-size: 10px; font-weight: 600; }
 .comment-badge-text { fill: #fff; font-size: 8px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+.add-comment-btn { cursor: pointer; }
+.add-comment-btn circle { fill: #0f1a30; stroke: #3a7bd5; stroke-width: 1.5; transition: all .15s; }
+.add-comment-btn:hover circle { fill: #1a2a50; stroke: #5a9bf5; }
+.add-comment-text { fill: #3a7bd5; font-size: 16px; font-weight: 700; text-anchor: middle; dy: 0; }
+.add-comment-btn:hover .add-comment-text { fill: #5a9bf5; }
 .hint { text-align: center; color: #444; font-size: 11px; padding: 6px; flex-shrink: 0; }
 
 /* ---- RIGHT PANELS ---- */
@@ -298,21 +303,30 @@ body {
 }
 .modal h3 { font-size: 16px; color: #fff; margin-bottom: 14px; }
 
-/* Modal tabs */
-.modal-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+/* Modal tabs — styled as tabs flush above the textarea */
+.modal-tabs { display: flex; gap: 0; margin-bottom: 0; padding-left: 1px; }
 .modal-tab {
-    padding: 6px 14px;
-    border-radius: 6px;
+    padding: 5px 14px;
+    border-radius: 6px 6px 0 0;
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
-    background: #0f1a30;
+    background: #0a1225;
     color: #666;
-    border: 1px solid transparent;
+    border: 1px solid #2a2a4a;
+    border-bottom: 1px solid #2a2a4a;
+    margin-right: 2px;
     transition: all .15s;
+    position: relative;
 }
-.modal-tab:hover { color: #aaa; }
-.modal-tab.active { color: #fff; border-color: #3a7bd5; background: #0f3460; }
+.modal-tab:hover { color: #aaa; background: #0d1630; }
+.modal-tab.active {
+    color: #e0e0e0;
+    background: #0f1a30;
+    border-color: #2a2a4a;
+    border-bottom-color: #0f1a30;
+    z-index: 1;
+}
 .modal-tab .tab-badge {
     display: inline-block;
     width: 16px;
@@ -349,22 +363,23 @@ body {
     margin-top: 2px;
 }
 
-/* Modal textarea */
+/* Modal textarea — top-left square to connect with tabs */
 .modal-comment {
     width: 100%;
     min-height: 80px;
     background: #0f1a30;
     border: 1px solid #2a2a4a;
-    border-radius: 6px;
+    border-radius: 0 6px 6px 6px;
     color: #e0e0e0;
     padding: 10px;
     font-size: 12px;
     font-family: inherit;
     resize: vertical;
+    margin-top: -1px;
     margin-bottom: 14px;
+    position: relative;
 }
 .modal-comment:focus { outline: none; border-color: #3a7bd5; }
-.modal-comment-label { font-size: 11px; color: #888; margin-bottom: 4px; }
 
 /* Modal actions */
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
@@ -688,6 +703,15 @@ body {
     margin-left: 4px;
     font-weight: 700;
 }
+.kanban-card .card-dates {
+    font-size: 9px;
+    color: #888;
+    margin-top: 4px;
+}
+.kanban-card .card-dates-sep {
+    margin: 0 2px;
+    color: #555;
+}
 .kanban-card.sortable-ghost { opacity: 0.4; }
 .kanban-empty {
     font-size: 11px;
@@ -761,6 +785,8 @@ body {
 .kanban-modal .form-input:focus { outline: none; border-color: #3a7bd5; }
 .kanban-modal textarea.form-input { min-height: 60px; resize: vertical; }
 .kanban-modal select.form-input { cursor: pointer; }
+.kanban-modal .form-row { display: flex; gap: 12px; }
+.kanban-modal .form-half { flex: 1; }
 .kanban-modal .form-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; margin-top: 16px; }
 .kanban-modal .btn-primary:disabled {
     opacity: 0.6;
@@ -828,6 +854,19 @@ body {
     margin-right: 4px;
     vertical-align: middle;
 }
+
+/* ---- ROLE BADGES ---- */
+.role-select {
+    background: #0f1a30;
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    color: #e0e0e0;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+}
+.role-select:focus { outline: none; border-color: #3a7bd5; }
 
 /* ---- COLORS ---- */
 .c-none { background: #333; }

@@ -202,6 +202,7 @@ function drawIndicatorWheel(svgId, indData, opts) {
     var slotDefs = {
         6: { x: 4, w: BOX_W, s: 'left' },
         5: { x: 4, w: BOX_W, s: 'left' },
+        4: { x: 4, w: BOX_W, s: 'left' },
         0: { x: 4, w: BOX_W, s: 'left' },
         1: { x: 800 - BOX_W - 5, w: BOX_W, s: 'right' },
         2: { x: 800 - BOX_W - 5, w: BOX_W, s: 'right' },
@@ -286,7 +287,7 @@ function drawIndicatorWheel(svgId, indData, opts) {
         return r;
     }
 
-    var leftSteps = [6, 5, 0];
+    var leftSteps = [6, 5, 4, 0];
     var rightSteps = [1, 2, 3];
     var allSlots = posSlots(leftSteps).concat(posSlots(rightSteps));
 
@@ -312,8 +313,9 @@ function drawIndicatorWheel(svgId, indData, opts) {
         // Group
         var grp = mk('g');
         grp.style.cursor = 'pointer';
-        if (opts.onClick) {
-            (function(idx) { grp.onclick = function() { opts.onClick(idx); }; })(si);
+        var commentClickFn = opts.onCommentClick || opts.onClick;
+        if (commentClickFn) {
+            (function(idx) { grp.onclick = function() { commentClickFn(idx); }; })(si);
         }
 
         var gt = mk('title');
@@ -389,7 +391,7 @@ function drawIndicatorWheel(svgId, indData, opts) {
 
     // Ellipses on top (after comment boxes)
     for (var i = 0; i < 7; i++) {
-        var wc = worstColor(indData[i]);
+        var wc = opts.wheelColors ? opts.wheelColors[i] : worstColor(indData[i]);
         var g = mk('g');
         g.setAttribute('class', 'step-ellipse');
 
@@ -425,6 +427,44 @@ function drawIndicatorWheel(svgId, indData, opts) {
         });
         g.appendChild(txt);
         svg.appendChild(g);
+    }
+
+    // "+" buttons for steps without comments (global/category views)
+    if (opts.onCommentClick) {
+        for (var pi = 0; pi < 7; pi++) {
+            if (layerComments(indData[pi]).length > 0) continue;
+            // Direction from wheel center through ellipse center, push beyond ellipse edge
+            var dx = pos[pi].x - cx, dy = pos[pi].y - cy;
+            var dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            var ux = dx / dist, uy = dy / dist;
+            // Distance from ellipse center to boundary in direction (ux,uy)
+            var edgeDist = (rx * ry) / Math.sqrt(ry * ry * ux * ux + rx * rx * uy * uy);
+            var px = pos[pi].x + ux * (edgeDist + 12);
+            var py = pos[pi].y + uy * (edgeDist + 12);
+
+            var pg = mk('g');
+            pg.setAttribute('class', 'add-comment-btn');
+            (function(idx) { pg.onclick = function(e) { e.stopPropagation(); opts.onCommentClick(idx); }; })(pi);
+
+            var pti = mk('title');
+            pti.textContent = 'Ajouter un commentaire';
+            pg.appendChild(pti);
+
+            var pc = mk('circle');
+            pc.setAttribute('cx', px);
+            pc.setAttribute('cy', py);
+            pc.setAttribute('r', 9);
+            pg.appendChild(pc);
+
+            var pt = mk('text');
+            pt.setAttribute('x', px);
+            pt.setAttribute('y', py + 5);
+            pt.setAttribute('class', 'add-comment-text');
+            pt.textContent = '+';
+            pg.appendChild(pt);
+
+            svg.appendChild(pg);
+        }
     }
 
     // Center text
@@ -492,7 +532,7 @@ function openModal(stepIdx, context, opts) {
     if (context === 'indicateur') {
         _modal.tabs = ['indicateur', 'categorie', 'global'];
     } else if (context === 'categorie') {
-        _modal.tabs = ['categorie'];
+        _modal.tabs = ['categorie', 'global'];
     } else {
         _modal.tabs = ['global'];
     }
@@ -551,9 +591,9 @@ function switchTab(layer) {
         t.classList.toggle('active', t.getAttribute('data-tab') === layer);
     });
 
-    // Update note for indicateur context
+    // Update note based on active tab
     var noteEl = document.getElementById('modal-note');
-    if (_modal.context === 'indicateur') {
+    if (_modal.context === 'indicateur' || _modal.context === 'categorie') {
         if (layer === 'global') noteEl.textContent = 'Propage a TOUS les indicateurs.';
         else if (layer === 'categorie') noteEl.textContent = 'Propage aux indicateurs de cette categorie.';
         else noteEl.textContent = 'Ne modifie que cet indicateur.';
@@ -596,6 +636,9 @@ function loadTabData() {
 
     // Le commentaire est toujours celui de la couche cible
     document.getElementById('modal-comment').value = comment;
+
+    // Masquer la zone commentaire tant qu'aucune couleur n'est choisie
+    _showCommentZone(!!color);
 }
 
 function selColor(btn) {
@@ -604,6 +647,12 @@ function selColor(btn) {
     var btns = document.querySelectorAll('#modal-colors .color-btn');
     btns.forEach(function(b) { b.classList.remove('selected'); });
     btn.classList.add('selected');
+    _showCommentZone(true);
+}
+
+function _showCommentZone(show) {
+    document.getElementById('modal-tabs').style.display = show ? '' : 'none';
+    document.getElementById('modal-comment').style.display = show ? '' : 'none';
 }
 
 function clearLayer() {
@@ -631,13 +680,9 @@ function saveModal() {
     var etape = _modal.stepIdx + 1;
     var layer = _modal.activeTab;
 
-    // Determine the save context based on the active tab and original context
-    var saveContext;
-    if (_modal.context === 'indicateur') {
-        saveContext = layer;  // G→global, C→categorie, I→indicateur
-    } else {
-        saveContext = _modal.context;
-    }
+    // Le contexte de sauvegarde correspond toujours a la couche active
+    // G→global (propage a tous), C→categorie, I→indicateur
+    var saveContext = layer;
 
     var body = {
         context: saveContext,
@@ -697,20 +742,24 @@ function showGlobalDrill(stepIdx, drillData, globalLayerValues) {
     el.classList.add('open');
 }
 
-function showCatDrill(stepIdx, drillData, catLayerValues, categorie_id) {
+function showCatDrill(stepIdx, drillData, catLayerValues, categorie_id, globalLayerValues) {
     var el = document.getElementById('drill-area');
     if (!el) return;
 
     var etape = stepIdx + 1;
     var items = drillData[etape] || [];
 
+    var lvJson = JSON.stringify({
+        categorie: catLayerValues[etape] || {color:null,comment:''},
+        global: (globalLayerValues && globalLayerValues[etape]) || {color:null,comment:''}
+    });
+
     var html = '<div class="drill-edit-header">' +
         '<h3>Etape ' + etape + ' : ' + STEPS[stepIdx].short + '</h3>' +
         '<span class="drill-edit-link" onclick="openModal(' + stepIdx +
         ', \'categorie\', {categorie_id:' + categorie_id +
-        ', layerValues:{categorie:' +
-        JSON.stringify(catLayerValues[etape] || {color:null,comment:''}) +
-        '}})">Modifier statut categorie</span>' +
+        ', layerValues:' + lvJson +
+        '})">Modifier statut categorie</span>' +
         '</div>';
 
     html += '<table class="drill-table"><tr><th>Code</th><th>Description</th><th>Statut</th></tr>';

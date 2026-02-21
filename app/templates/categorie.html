@@ -42,7 +42,7 @@
     <a class="kanban-new-btn" href="{{ url_for('main.vue_kanban_categorie', id=data.categorie.id) }}" style="text-decoration:none">Actions (Kanban)</a>
 </div>
 <div class="wheel-area">
-    <svg id="wh-cat" width="440" height="440" viewBox="0 0 440 440"></svg>
+    <svg id="wh-cat" width="800" height="490" viewBox="0 0 800 490"></svg>
     <div class="right-panels">
         <div id="sp-cat"></div>
     </div>
@@ -58,13 +58,37 @@
     var statusCounts = {{ data.status_counts|tojson }};
     var drillData = {{ drill_data|tojson }};
     var catLayerValues = {{ cat_layer_values|tojson }};
+    var globalLayerValues = {{ global_layer_values|tojson }};
     var categorieId = {{ data.categorie.id }};
 
-    drawSimpleWheel('wh-cat', wheelColors, {
-        c1: '{{ data.categorie.nom }}',
-        c2: '{{ data.total }} indicateurs',
+    // Reformater en stepData pour drawIndicatorWheel (couches global + categorie)
+    var catStepData = [];
+    for (var i = 0; i < 7; i++) {
+        var lv = catLayerValues[i + 1] || {color: null, comment: ''};
+        var gv = globalLayerValues[i + 1] || {color: null, comment: ''};
+        catStepData.push({
+            global: (gv.color || gv.comment) ? gv : null,
+            categorie: (lv.color || lv.comment) ? lv : null,
+            indicateur: null
+        });
+    }
+
+    drawIndicatorWheel('wh-cat', catStepData, {
+        centerCode: '{{ data.categorie.nom }}',
+        centerDate: '{{ data.total }} indicateurs',
+        wheelColors: wheelColors,
         onClick: function(idx) {
-            showCatDrill(idx, drillData, catLayerValues, categorieId);
+            showCatDrill(idx, drillData, catLayerValues, categorieId, globalLayerValues);
+        },
+        onCommentClick: function(idx) {
+            var etape = idx + 1;
+            openModal(idx, 'categorie', {
+                categorie_id: categorieId,
+                layerValues: {
+                    categorie: catLayerValues[etape] || {color: null, comment: ''},
+                    global: globalLayerValues[etape] || {color: null, comment: ''}
+                }
+            });
         }
     });
 

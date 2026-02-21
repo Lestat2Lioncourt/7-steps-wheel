@@ -10,12 +10,16 @@
 
 <div class="accueil-container">
     <h1 class="accueil-title">Suivi de mise en place des indicateurs des contrats</h1>
-    <p class="accueil-subtitle">Connecte : {{ user_nom }}
-        <a href="{{ url_for('main.logout') }}" style="color:#e94560;font-size:11px;margin-left:8px">changer</a>
-    </p>
+    <p class="accueil-subtitle">Connecte : {{ user_nom }}</p>
 
     {% if attach_error %}
     <p style="color:#dc2626;font-size:13px">{{ attach_error }}</p>
+    {% endif %}
+
+    {% if request.args.get('error') == 'non_membre' %}
+    <p style="color:#dc2626;font-size:13px">Vous n'etes pas membre de ce projet. Contactez un administrateur pour etre ajoute.</p>
+    {% elif request.args.get('error') == 'info_only' %}
+    <p style="color:#eab308;font-size:13px">Votre role sur ce projet est "Information" : vous recevrez les comptes-rendus mais n'avez pas acces a l'application.</p>
     {% endif %}
 
     <p class="accueil-subtitle">Selectionnez un projet</p>

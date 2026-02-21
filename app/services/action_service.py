@@ -24,8 +24,9 @@ def _fetch_actions(conn, where_clause, params):
                a.indicateur_id, a.categorie_id,
                a.etape, e.nom as etape_nom,
                a.assignee_login, u.nom as assignee_nom, u.trigramme as assignee_trigramme,
-               a.statut, a.commentaire, a.cree_par,
-               a.date_creation, a.date_modification,
+               a.statut, a.commentaire,
+               a.date_debut, a.date_fin,
+               a.cree_par, a.date_creation, a.date_modification,
                c.nom as categorie_nom
         FROM actions a
         JOIN etapes e ON a.etape = e.numero
@@ -107,8 +108,9 @@ def create_action(data):
         conn.execute("""
             INSERT INTO actions
                 (titre, description, niveau, indicateur_id, categorie_id,
-                 etape, assignee_login, statut, commentaire, cree_par, date_creation)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'a_faire', ?, ?, ?)
+                 etape, assignee_login, statut, commentaire,
+                 date_debut, date_fin, cree_par, date_creation)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'a_faire', ?, ?, ?, ?, ?)
         """, (
             data['titre'],
             data.get('description'),
@@ -118,6 +120,8 @@ def create_action(data):
             data['etape'],
             data['assignee_login'],
             data.get('commentaire'),
+            data.get('date_debut') or None,
+            data.get('date_fin') or None,
             data.get('cree_par', 'admin'),
             date.today().isoformat(),
         ))
@@ -150,7 +154,9 @@ def update_action(action_id, data):
         conn.execute("""
             UPDATE actions
             SET titre = ?, description = ?, assignee_login = ?,
-                etape = ?, commentaire = ?, date_modification = ?
+                etape = ?, commentaire = ?,
+                date_debut = ?, date_fin = ?,
+                date_modification = ?
             WHERE id = ?
         """, (
             data['titre'],
@@ -158,6 +164,8 @@ def update_action(action_id, data):
             data['assignee_login'],
             data['etape'],
             data.get('commentaire'),
+            data.get('date_debut') or None,
+            data.get('date_fin') or None,
             date.today().isoformat(),
             action_id,
         ))

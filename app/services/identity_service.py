@@ -17,69 +17,73 @@ IDENTITY_PATH = DATA_DIR / "identity.json"
 # Detection depuis le registre Windows
 # -------------------------------------------------------------------
 def detect_from_registry():
-    """Tente de lire l'identite O365 depuis le registre Windows.
-    Retourne {email, nom} ou None."""
+    """Detecte les identites O365 depuis le registre Windows.
+    Retourne une liste de {email, nom} (peut etre vide)."""
     if sys.platform != "win32":
-        return None
+        return []
     try:
         import winreg
     except ImportError:
-        return None
+        return []
 
-    email = None
-    nom = None
+    accounts = []
+    seen_emails = set()
 
-    # 1. OneDrive Business (le plus fiable)
+    # 1. OneDrive Business (Business1, Business2, ...)
+    i = 1
+    while True:
+        try:
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                rf"Software\Microsoft\OneDrive\Accounts\Business{i}",
+            )
+            email = None
+            nom = None
+            try:
+                email, _ = winreg.QueryValueEx(key, "UserEmail")
+            except OSError:
+                pass
+            try:
+                nom, _ = winreg.QueryValueEx(key, "UserName")
+            except OSError:
+                pass
+            winreg.CloseKey(key)
+            if email and email.lower() not in seen_emails:
+                seen_emails.add(email.lower())
+                accounts.append({"email": email, "nom": nom or email.split("@")[0]})
+            i += 1
+        except OSError:
+            break
+
+    # 2. Fallback : WorkplaceJoin
     try:
-        key = winreg.OpenKey(
+        base = winreg.OpenKey(
             winreg.HKEY_CURRENT_USER,
-            r"Software\Microsoft\OneDrive\Accounts\Business1",
+            r"Software\Microsoft\Windows NT\CurrentVersion\WorkplaceJoin\JoinInfo",
         )
-        try:
-            email, _ = winreg.QueryValueEx(key, "UserEmail")
-        except OSError:
-            pass
-        try:
-            nom, _ = winreg.QueryValueEx(key, "UserName")
-        except OSError:
-            pass
-        winreg.CloseKey(key)
+        j = 0
+        while True:
+            try:
+                subname = winreg.EnumKey(base, j)
+                sub = winreg.OpenKey(base, subname)
+                email = None
+                try:
+                    email, _ = winreg.QueryValueEx(sub, "UserEmail")
+                except OSError:
+                    pass
+                winreg.CloseKey(sub)
+                if email and email.lower() not in seen_emails:
+                    seen_emails.add(email.lower())
+                    nom = os.environ.get("USERNAME", email.split("@")[0])
+                    accounts.append({"email": email, "nom": nom})
+                j += 1
+            except OSError:
+                break
+        winreg.CloseKey(base)
     except OSError:
         pass
 
-    # 2. Fallback : WorkplaceJoin
-    if not email:
-        try:
-            base = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows NT\CurrentVersion\WorkplaceJoin\JoinInfo",
-            )
-            i = 0
-            while True:
-                try:
-                    subname = winreg.EnumKey(base, i)
-                    sub = winreg.OpenKey(base, subname)
-                    try:
-                        email, _ = winreg.QueryValueEx(sub, "UserEmail")
-                    except OSError:
-                        pass
-                    winreg.CloseKey(sub)
-                    if email:
-                        break
-                    i += 1
-                except OSError:
-                    break
-            winreg.CloseKey(base)
-        except OSError:
-            pass
-
-    # 3. Fallback : USERNAME Windows
-    if not nom:
-        nom = os.environ.get("USERNAME", "")
-
-    if email:
-        return {"email": email, "nom": nom or email.split("@")[0]}
-    return None
+    return accounts
 
 
 # -------------------------------------------------------------------
@@ -175,7 +179,7 @@ def create_placeholder_user(email):
             return row["login"]
 
         conn.execute(
-            "INSERT INTO utilisateurs (login, nom, email, trigramme, role) VALUES (?, ?, ?, NULL, 'intervenant')",
+            "INSERT INTO utilisateurs (login, nom, email, trigramme, role) VALUES (?, ?, ?, NULL, 'membre')",
             (login, email, email),
         )
         conn.commit()
@@ -188,19 +192,21 @@ def create_placeholder_user(email):
 # Synchronisation avec la table utilisateurs du projet actif
 # -------------------------------------------------------------------
 def ensure_user_in_db(login, nom, email="", trigramme=""):
-    """Cree ou met a jour l'utilisateur dans la table utilisateurs.
-    Si email fourni et un placeholder avec cet email existe (login different),
-    fusionne : met a jour le placeholder + les FK dans actions."""
+    """Verifie si l'utilisateur est membre du projet.
+    - Si login existe : UPDATE nom/email/trigramme, retourne le role.
+    - Si email match un placeholder (login different) : fusion, retourne le role.
+    - Si n'existe pas : retourne None (pas d'auto-insert)."""
     conn = get_connection()
     try:
         # Fusion placeholder : chercher un utilisateur avec cet email mais un login different
         if email:
             placeholder = conn.execute(
-                "SELECT login FROM utilisateurs WHERE email = ? AND login != ?",
+                "SELECT login, role FROM utilisateurs WHERE email = ? AND login != ?",
                 (email, login),
             ).fetchone()
             if placeholder:
                 old_login = placeholder["login"]
+                role = placeholder["role"]
                 # Mettre a jour les FK dans actions
                 conn.execute(
                     "UPDATE actions SET assignee_login = ? WHERE assignee_login = ?",
@@ -216,22 +222,34 @@ def ensure_user_in_db(login, nom, email="", trigramme=""):
                     (login, nom, trigramme or None, email, old_login),
                 )
                 conn.commit()
-                return
+                return role
 
-        # Flow normal : INSERT ou UPDATE par login
+        # Chercher par login
         row = conn.execute(
-            "SELECT login FROM utilisateurs WHERE login = ?", (login,)
+            "SELECT role FROM utilisateurs WHERE login = ?", (login,)
         ).fetchone()
-        if not row:
-            conn.execute(
-                "INSERT INTO utilisateurs (login, nom, email, trigramme, role) VALUES (?, ?, ?, ?, 'intervenant')",
-                (login, nom, email or None, trigramme or None),
-            )
-        else:
+        if row:
             conn.execute(
                 "UPDATE utilisateurs SET nom = ?, email = ?, trigramme = ? WHERE login = ?",
                 (nom, email or None, trigramme or None, login),
             )
+            conn.commit()
+            return row["role"]
+
+        # Pas membre de ce projet
+        return None
+    finally:
+        conn.close()
+
+
+def add_user_to_project(login, nom, email="", trigramme="", role="membre"):
+    """Insere un utilisateur dans la table utilisateurs du projet actif."""
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO utilisateurs (login, nom, email, trigramme, role) VALUES (?, ?, ?, ?, ?)",
+            (login, nom, email or None, trigramme or None, role),
+        )
         conn.commit()
     finally:
         conn.close()

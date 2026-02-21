@@ -624,8 +624,9 @@ def get_step_layer_values(etape):
             WHERE ie.etape = ?
             LIMIT 1
         """, (etape,)).fetchone()
-        if row and row['sev'] is not None:
-            return {'color': _SEVERITE_TO_COLOR.get(row['sev'], None), 'comment': row['comment'] or ''}
+        if row:
+            return {'color': _SEVERITE_TO_COLOR.get(row['sev'], None) if row['sev'] is not None else None,
+                    'comment': row['comment'] or ''}
         return {'color': None, 'comment': ''}
     finally:
         conn.close()
@@ -646,8 +647,9 @@ def get_step_layer_values_cat(categorie_id, etape):
             WHERE ie.etape = ? AND i.categorie_id = ?
             LIMIT 1
         """, (etape, categorie_id)).fetchone()
-        if row and row['sev'] is not None:
-            return {'color': _SEVERITE_TO_COLOR.get(row['sev'], None), 'comment': row['comment'] or ''}
+        if row:
+            return {'color': _SEVERITE_TO_COLOR.get(row['sev'], None) if row['sev'] is not None else None,
+                    'comment': row['comment'] or ''}
         return {'color': None, 'comment': ''}
     finally:
         conn.close()

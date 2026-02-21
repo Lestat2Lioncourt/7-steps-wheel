@@ -7,11 +7,14 @@ var _saving = false;
 var _acTimer = null;
 
 function initKanban() {
+    var isLecteur = window._userRole === 'lecteur';
+
     document.querySelectorAll('.kanban-cards').forEach(function(el) {
         new Sortable(el, {
             group: 'kanban',
             animation: 150,
             ghostClass: 'sortable-ghost',
+            disabled: isLecteur,
             onEnd: function(evt) {
                 var cardEl = evt.item;
                 var actionId = cardEl.getAttribute('data-id');
@@ -211,6 +214,8 @@ function openActionModal(actionId) {
         document.getElementById('km-etape').value = card.getAttribute('data-etape') || '1';
         document.getElementById('km-commentaire').value = card.getAttribute('data-commentaire') || '';
         document.getElementById('km-description').value = card.getAttribute('data-description') || '';
+        document.getElementById('km-date-debut').value = card.getAttribute('data-date-debut') || '';
+        document.getElementById('km-date-fin').value = card.getAttribute('data-date-fin') || '';
 
         // Pre-fill assignee autocomplete
         var assigneeLogin = card.getAttribute('data-assignee') || '';
@@ -287,6 +292,8 @@ function saveAction() {
         assignee_login: assignee,
         commentaire: document.getElementById('km-commentaire').value.trim() || null,
         description: document.getElementById('km-description').value.trim() || null,
+        date_debut: document.getElementById('km-date-debut').value || null,
+        date_fin: document.getElementById('km-date-fin').value || null,
     };
 
     if (actionId) {

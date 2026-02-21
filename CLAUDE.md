@@ -16,12 +16,13 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 7. Composant SVG de la roue (3 niveaux Global/Categorie/Indicateur)
 8. Backend API complet (routes Flask : step save, actions CRUD, user search)
 9. Vues : Global, Categorie, Indicateur, Kanban (3 niveaux), Referentiel, Login, Accueil
-10. Systeme d'identification : login par email O365, trigramme auto-suggere
+10. Systeme d'identification : auto-detection O365 multi-comptes, verrouillage sur identite Windows
 11. Kanban : drag & drop, autocomplete assignee, assignation par email (placeholder user)
 12. Gestion multi-projets : creation, rattachement distant par reference directe
 13. Script de lancement `start.py` (detection port, ouverture navigateur unique)
+14. Gestion des membres : 4 roles (admin/membre/lecteur/information), controle d'acces, page admin, invitation
 
-**Prochaines etapes** : Systeme inbox/outbox, historique/snapshots, generation CR, import Excel.
+**Prochaines etapes** : Historique/snapshots, generation CR, import Excel.
 
 ## Fichiers du projet
 
@@ -29,7 +30,9 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 |---------|------|
 | `ROADMAP.md` | Documentation complete du projet : concepts, fonctionnalites, architecture, decisions |
 | `CLAUDE.md` | Ce fichier - contexte pour Claude Code |
-| `start.py` | Script de lancement : demarre Flask + ouvre le navigateur (detection port, reloader-safe) |
+| `start.py` | Script de lancement : demarre Flask + ouvre le navigateur (detection port, reloader-safe, compatible pythonw) |
+| `Roue CSI.vbs` | Lanceur silencieux (pas de fenetre console) — appelle pythonw + start.py |
+| `installer-raccourci.bat` | Cree un raccourci bureau "Roue CSI" — a executer une fois par utilisateur |
 | `requirements.txt` | Dependances Python (flask) |
 | **`app/`** | **Code source Python (Flask)** |
 | `app/main.py` | Point d'entree Flask (app factory + ouverture navigateur auto) |
@@ -38,12 +41,14 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 | `app/database/seed_demo.sql` | Donnees de demonstration (categories, indicateurs, actions, utilisateurs) |
 | `app/database/db.py` | init_db(), get_connection(), migration auto, create_project(), attach_project() |
 | `app/routes/main.py` | Blueprint principal : login, vues, API step/actions/users, gestion projets |
-| `app/services/identity_service.py` | Detection identite (registre Windows/O365), trigramme, placeholder user, fusion |
+| `app/services/identity_service.py` | Detection identite O365 multi-comptes, trigramme, placeholder user, fusion |
 | `app/services/action_service.py` | CRUD actions Kanban, regroupement par statut |
+| `app/services/member_service.py` | CRUD membres projet (ajout, role, retrait avec gardes) |
 | `app/services/indicateur_service.py` | Donnees roue (3 niveaux), save_step, referentiel |
-| `app/templates/` | Templates Jinja2 : base, login, accueil, global, categorie, indicateur, kanban, referentiel |
+| `app/templates/` | Templates Jinja2 : base, login, accueil, global, categorie, indicateur, kanban, referentiel, membres |
 | `app/static/js/wheel.js` | Composant SVG roue + modale edition statuts/commentaires |
 | `app/static/js/kanban.js` | Kanban drag & drop + autocomplete assignee |
+| `app/static/js/membres.js` | CRUD membres, copie invitation, auto-trigramme |
 | `app/static/css/style.css` | Theme sombre complet |
 | **`data/`** | **Donnees utilisateur (hors git)** |
 | `data/projects.json` | Liste des projets (locaux et distants) |
@@ -56,7 +61,7 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 ## Decisions cles prises
 
 - **Stack** : Python Flask, SQLite, HTML/CSS/JS + SVG
-- **Deploiement** : Standalone (serveur local, ouverture navigateur auto), heberge sur OneDrive
+- **Deploiement** : Standalone (serveur local, ouverture navigateur auto), app + DB sur OneDrive partage. Concurrence d'ecriture quasi impossible (reunions projet en seance, un seul utilisateur modifie a la fois)
 - **Interface** : 2 onglets (Roue CSI / Referentiel), fiche fixe verticale au niveau indicateur
 - **Commentaires** : Systeme a 3 couches (Global/Categorie/Indicateur) par etape, "le pire l'emporte"
 - **Kanban** : 5 colonnes, rattachement a 3 niveaux (global, categorie+etape, indicateur+etape)
@@ -67,7 +72,8 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 - **Echanges multi-utilisateurs** : Pattern inbox/outbox JSON via OneDrive
 - **Notifications** : Power Automate (l'utilisateur aura besoin d'accompagnement)
 - **Compteurs** : Inline dans la barre de titre (pastilles compactes)
-- **Identification** : Login par email O365, trigramme, detection registre Windows en fallback
+- **Identification** : Auto-detection O365 depuis registre Windows (multi-comptes : selection si plusieurs). Formulaire manuel uniquement si detection impossible. Identite verrouillee sur le compte Windows (pas de saisie libre d'email)
+- **Roles** : 4 niveaux — admin (tout + gestion membres), membre (consulter + modifier), lecteur (consulter uniquement), information (pas d'acces app, destinataire CR uniquement). Createur d'un projet = admin automatique
 
 ## Concepts metier essentiels
 
@@ -85,11 +91,11 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 - [x] Composant SVG de la roue (reutilisable aux 3 niveaux)
 - [x] Backend API (routes Flask : step save, actions CRUD, user search, projets)
 - [x] Vues : Global, Categorie, Indicateur, Kanban, Referentiel, Login, Accueil
-- [x] Gestion utilisateurs : login email, trigramme, placeholder user, fusion
+- [x] Gestion utilisateurs : auto-detection O365 multi-comptes, identite verrouillee
 - [x] Kanban : drag & drop, autocomplete assignee, assignation par email
 - [x] Gestion multi-projets : creation vierge + rattachement distant
 - [x] Script de lancement start.py
-- [ ] Systeme inbox/outbox
+- [x] Gestion membres : 4 roles (admin/membre/lecteur/information), controle d'acces, page admin, invitation
 - [ ] Historique et enregistrement global (snapshots)
 - [ ] Generation du CR (compte-rendu diff)
 - [ ] Notifications Power Automate
@@ -99,7 +105,6 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 ## Points en attente cote utilisateur
 
 - Textes detailles des tooltips pour chaque etape de la roue ("je te fournirai le detail")
-- Choix mecanisme inbox tracking (table en base vs gestion par fichiers)
 
 ## Langue
 
