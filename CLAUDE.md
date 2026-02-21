@@ -21,6 +21,11 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 12. Gestion multi-projets : creation, rattachement distant par reference directe
 13. Script de lancement `start.py` (detection port, ouverture navigateur unique)
 14. Gestion des membres : 4 roles (admin/membre/lecteur/information), controle d'acces, page admin, invitation
+15. Bulles commentaires sur roues globale et categorie (drawIndicatorWheel avec couches G/C visibles)
+16. Edition directe des commentaires par clic sur bulle ou bouton "+" (sans descendre au niveau indicateur)
+17. Heritage couleurs : la couche globale se propage sur les vues categorie (worstColor + wheelColors backend)
+18. Modale edition : onglets couche [C]/[G] au-dessus du textarea (style tabs), couleur obligatoire avant commentaire
+19. Kanban : dates de debut et fin previsionnelle sur les actions (schema, migration auto, CRUD, affichage cartes)
 
 **Prochaines etapes** : Historique/snapshots, generation CR, import Excel.
 
@@ -36,7 +41,7 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 | `requirements.txt` | Dependances Python (flask) |
 | **`app/`** | **Code source Python (Flask)** |
 | `app/main.py` | Point d'entree Flask (app factory + ouverture navigateur auto) |
-| `app/database/schema.sql` | Schema SQLite complet (12 tables, colonnes email/trigramme sur utilisateurs) |
+| `app/database/schema.sql` | Schema SQLite complet (12 tables, colonnes email/trigramme sur utilisateurs, dates debut/fin sur actions) |
 | `app/database/seed.sql` | Donnees de reference initiales (etapes, statuts, etats, types) |
 | `app/database/seed_demo.sql` | Donnees de demonstration (categories, indicateurs, actions, utilisateurs) |
 | `app/database/db.py` | init_db(), get_connection(), migration auto, create_project(), attach_project() |
@@ -46,7 +51,7 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 | `app/services/member_service.py` | CRUD membres projet (ajout, role, retrait avec gardes) |
 | `app/services/indicateur_service.py` | Donnees roue (3 niveaux), save_step, referentiel |
 | `app/templates/` | Templates Jinja2 : base, login, accueil, global, categorie, indicateur, kanban, referentiel, membres |
-| `app/static/js/wheel.js` | Composant SVG roue + modale edition statuts/commentaires |
+| `app/static/js/wheel.js` | Composant SVG roue (drawSimpleWheel + drawIndicatorWheel avec bulles commentaires, bouton "+"), modale edition statuts/commentaires |
 | `app/static/js/kanban.js` | Kanban drag & drop + autocomplete assignee |
 | `app/static/js/membres.js` | CRUD membres, copie invitation, auto-trigramme |
 | `app/static/css/style.css` | Theme sombre complet |
@@ -63,8 +68,8 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 - **Stack** : Python Flask, SQLite, HTML/CSS/JS + SVG
 - **Deploiement** : Standalone (serveur local, ouverture navigateur auto), app + DB sur OneDrive partage. Concurrence d'ecriture quasi impossible (reunions projet en seance, un seul utilisateur modifie a la fois)
 - **Interface** : 2 onglets (Roue CSI / Referentiel), fiche fixe verticale au niveau indicateur
-- **Commentaires** : Systeme a 3 couches (Global/Categorie/Indicateur) par etape, "le pire l'emporte"
-- **Kanban** : 5 colonnes, rattachement a 3 niveaux (global, categorie+etape, indicateur+etape)
+- **Commentaires** : Systeme a 3 couches (Global/Categorie/Indicateur) par etape, "le pire l'emporte". Bulles visibles aux 3 niveaux de roue. Edition directe par clic bulle ou bouton "+". Couleur obligatoire avant saisie commentaire
+- **Kanban** : 5 colonnes, rattachement a 3 niveaux (global, categorie+etape, indicateur+etape), dates debut/fin previsionnelles
 - **Assignation** : Autocomplete par nom/login/email/trigramme + assignation a un email inconnu (placeholder user fusionne a la connexion)
 - **Trigramme** : Auto-suggere depuis le nom (initiale prenom + 2 lettres nom), affiche sur cartes et topbar
 - **Multi-projets** : Projets locaux (DB dans data/) ou distants (reference directe vers .db partage, sans copie)
@@ -92,10 +97,12 @@ Application web Python standalone remplacant un fichier Excel macro (`Roue CSI.x
 - [x] Backend API (routes Flask : step save, actions CRUD, user search, projets)
 - [x] Vues : Global, Categorie, Indicateur, Kanban, Referentiel, Login, Accueil
 - [x] Gestion utilisateurs : auto-detection O365 multi-comptes, identite verrouillee
-- [x] Kanban : drag & drop, autocomplete assignee, assignation par email
+- [x] Kanban : drag & drop, autocomplete assignee, assignation par email, dates debut/fin
 - [x] Gestion multi-projets : creation vierge + rattachement distant
 - [x] Script de lancement start.py
 - [x] Gestion membres : 4 roles (admin/membre/lecteur/information), controle d'acces, page admin, invitation
+- [x] Bulles commentaires sur roues globale/categorie + edition directe (clic bulle / bouton "+")
+- [x] Heritage couleurs global → categorie, modale avec onglets couche au-dessus du textarea
 - [ ] Historique et enregistrement global (snapshots)
 - [ ] Generation du CR (compte-rendu diff)
 - [ ] Notifications Power Automate
