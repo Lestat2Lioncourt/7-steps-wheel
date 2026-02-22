@@ -2,7 +2,7 @@
 
 ## 1. Contexte
 
-Application generique de suivi de la maturite des indicateurs de service (SLA/KPI) basee sur la methodologie CSI (Continual Service Improvement). Remplace un outil Excel macro par une application Python web standalone, adaptable a tout contexte de suivi d'indicateurs.
+Application generique de suivi de la maturite des indicateurs de service (SLA/KPI/XLA) basee sur la methodologie CSI (Continual Service Improvement). Remplace un outil Excel macro par une application web Python (Flask + PostgreSQL), multi-clients, multi-projets, deployable en Docker.
 
 ---
 
@@ -100,13 +100,27 @@ Les categories sont definies librement par l'utilisateur admin (exemples : "Suiv
 ### 2.6 Proprietes d'un indicateur
 
 - Code (ex: IQ_INC_1) - identifiant unique
-- Chapitre (optionnel, informatif) - reference documentaire libre, peut etre modifiee sans impact sur le fonctionnement de l'app. N'est PAS utilise comme cle ou identifiant.
+- Chapitre (optionnel, informatif) - reference documentaire libre
 - Description
 - Categorie
 - Etat (Cadre, En attente, Realise, Annule, En cours, A cadrer) — valeurs dans table de reference `etats_indicateur`
 - Type (SLA, KPI, XLA) — valeurs dans table de reference `types_indicateur`
-- Condition de ciblage (texte descriptif, consultable/modifiable sous la roue)
-- Condition de conformite (texte descriptif, consultable/modifiable sous la roue)
+- Condition de ciblage (texte descriptif) — heritable depuis la categorie ou le niveau global
+- Condition de conformite (texte descriptif) — heritable depuis la categorie ou le niveau global
+
+### 2.7 Ciblage et conformite heritables
+
+Les regles de ciblage et conformite peuvent etre definies a 3 niveaux, avec heritage du haut vers le bas :
+
+| Niveau | Porte | Exemple |
+|--------|-------|---------|
+| Global | Tous les indicateurs du projet | "Periode de reference : mois M-1" |
+| Categorie | Tous les indicateurs de la categorie | "Incidents de priorite P1 a P3 sur la periode" |
+| Indicateur | Cet indicateur uniquement | "Taux de resolution dans les SLA contractuels" |
+
+**Heritage :** un indicateur sans ciblage propre herite de sa categorie ; une categorie sans ciblage propre herite du global.
+
+**Double definition :** chaque regle peut avoir une definition fonctionnelle (comprehensible metier) et une definition technique (requete, source de donnees, outil).
 
 ---
 
@@ -127,7 +141,7 @@ L'application comporte **2 espaces principaux**, accessibles via des onglets dan
 
 **Tooltips :**
 - Survol d'un indicateur (sidebar, tableaux) : affiche l'intitule/description complet en tooltip
-- Survol d'une etape de la roue : affiche le texte detaille de l'etape en tooltip (textes a definir)
+- Survol d'une etape de la roue : affiche le texte detaille de l'etape en tooltip (textes definis par le pattern)
 - Survol d'un bloc commentaire : affiche le texte integral de toutes les couches (G/C/I) en tooltip
 
 **Layout general :**
@@ -156,15 +170,14 @@ L'application comporte **2 espaces principaux**, accessibles via des onglets dan
 - **Fiche fixe verticale** (bandeau permanent entre sidebar et roue) affichant :
   - Code, description, badges (type, etat, statut CSI)
   - Chapitre, categorie
-  - Conditions de ciblage et conformite (consultables/modifiables, retirees de sous la roue)
+  - Conditions de ciblage et conformite (avec heritage visible)
   - Lien vers le Kanban (actions)
 - Roue individuelle avec les 7 etapes et leurs couleurs
-- Commentaires affiches dans des blocs SVG autour de la roue, relies par des lignes pointillees a leur etape (jamais de chevauchement avec la roue)
+- Commentaires affiches dans des blocs SVG autour de la roue, relies par des lignes pointillees a leur etape
 - Les 3 couches de commentaires visibles (G/C/I) quand elles existent, avec indication d'origine
 - Panneau statut a droite de la roue
 - Panneau historique a droite : liste des dates de revue, clic pour voir l'etat a cette date
-- Clic sur une etape : modale d'edition avec 3 onglets ou sections (couche Global / Categorie / Indicateur), possibilite de vider une couche pour debloquer
-- La fiche apparait/disparait avec une transition animee lors du changement de niveau
+- Clic sur une etape : modale d'edition avec onglets (couche Global / Categorie / Indicateur), possibilite de vider une couche pour debloquer
 
 **Panneau filtre par statut (present sur toutes les vues avec roue) :**
 - Affiche a droite de la roue, sur les vues Global, Categorie et Indicateur
@@ -173,7 +186,6 @@ L'application comporte **2 espaces principaux**, accessibles via des onglets dan
   - Niveau 1 : Categories (cliquables → navigation vers vue categorie)
   - Niveau 2 : Indicateurs par categorie (cliquables → navigation vers vue indicateur), avec les etapes concernees et leurs commentaires
 - Au niveau vue Indicateur : liste les etapes ayant ce statut avec leurs commentaires
-- Complementaire au drill-down par etape : deux axes de lecture (par etape vs par statut)
 
 ### 3.3 Onglet Referentiel
 
@@ -191,170 +203,66 @@ Vue dediee au design et parametrage des indicateurs :
 ### 3.4 Vue Actions (Kanban)
 
 **Rattachement des actions :**
-- Une action peut etre rattachee a **2 niveaux** :
-  - **Indicateur + Etape** : cas standard, action specifique a un indicateur pour une etape donnee (ex: "Obtenir les referentiels" pour ITR_QUAL_REF_TECH / etape COLLECTE)
-  - **Categorie + Etape** : action transverse concernant tous les indicateurs d'une categorie pour une etape (ex: "Obtenir les acces a la BDD de supervision" pour Process Incident / etape Ce qu'on PEUT)
-- Les actions de niveau categorie sont visibles dans le Kanban de chaque indicateur de la categorie (en tant qu'actions heritees, distinguees visuellement)
+- Une action peut etre rattachee a **3 niveaux** :
+  - **Global** : action transverse concernant l'ensemble du projet
+  - **Categorie + Etape** : action transverse concernant tous les indicateurs d'une categorie pour une etape
+  - **Indicateur + Etape** : action specifique a un indicateur pour une etape donnee
+- Les actions de niveau superieur sont visibles dans les Kanban de niveau inferieur (en tant qu'actions heritees, distinguees visuellement)
+
+**Proprietes d'une action :**
+- Titre, description
+- Responsable (assignee)
+- Etape rattachee
+- Statut : A faire / En cours / A valider / Termine / Rejete
+- Date de debut previsionnelle
+- Date de fin previsionnelle
+- Predecesseurs (actions qui doivent etre terminees avant que celle-ci puisse demarrer)
+- Commentaire
+- Tache chapeau : une action peut avoir des sous-taches (parent/enfant)
+
+**Dependances entre actions :**
+- Une action peut declarer des predecesseurs (autres actions du meme projet)
+- Une action avec des predecesseurs non termines est visuellement marquee comme "bloquee"
+- Permet de modeliser des enchainements : "obtenir les acces" doit etre termine avant "configurer l'extraction"
+- Distinct de la hierarchie parent/enfant (decomposition vs sequencement)
+
+**Taches chapeau (parent/enfant) :**
+- Une action chapeau regroupe des sous-taches
+- Son statut et ses dates sont calcules dynamiquement depuis ses enfants
+- Drill-down au clic pour voir les sous-taches
+- Non draggable (statut derive)
 
 **Board Kanban :**
 - 5 colonnes : A faire / En cours / A valider / Termine / Rejete
-- Chaque carte : titre, assignee, etape rattachee, niveau (indicateur ou categorie)
-- Les cartes de niveau categorie sont marquees visuellement (badge "C" ou bordure distincte) pour les distinguer des cartes specifiques a l'indicateur
+- Drag & drop pour changer le statut
+- Chaque carte : titre, assignee (trigramme), etape rattachee, dates, badge niveau
+- Les cartes de niveau categorie sont marquees visuellement (badge "C")
 - Statut "A valider" : l'intervenant propose, le chef de projet valide ou rejette
 
 **Acces au Kanban :**
 - Depuis la fiche indicateur (lien "Actions / Kanban")
-- Depuis la vue categorie (pour voir les actions transverses de la categorie)
-- Vue "Mes taches" pour chaque intervenant (toutes ses taches, tous niveaux confondus)
+- Depuis la vue categorie (actions transverses de la categorie)
+- Vue globale (toutes les actions du projet)
 
 ### 3.5 Gestion de l'historique et revues
 
 - **Enregistrement global (snapshot)** : en fin de reunion, le chef de projet enregistre l'etat de tous les indicateurs a la date du jour
 - Les modifications entre deux revues sont du "travail en cours", figees lors de l'enregistrement
 - Navigation historique : clic sur une date de revue pour voir l'etat complet a cette date
-- **Lecture seule** : les donnees historiques sont strictement non modifiables. L'affichage d'un snapshot passe sert uniquement a la consultation et a la comparaison avec l'etat actuel
+- **Lecture seule** : les donnees historiques sont strictement non modifiables
 
 ### 3.6 Compte-rendu d'avancement (CR)
 
-Genere automatiquement lors de l'enregistrement global :
-- Vue globale : etapes ayant evolue (intitules avec fond couleur, pas les noms de couleurs)
+Genere automatiquement lors de l'enregistrement global (snapshot) :
+- Vue globale : etapes ayant evolue (intitules avec fond couleur)
 - Categories modifiees : statut avant/apres
 - Indicateurs modifies : etapes modifiees, commentaires, nouvelles actions
 - Actions terminees depuis la derniere revue
 - Format : HTML/PDF
-- Envoi : au chef de projet pour validation et redirection, ou directement a une liste de diffusion
+- Envoi automatique aux membres de role "information" (et optionnellement aux autres membres)
+- Le template du CR peut etre defini par le pattern du projet (sections, niveau de detail)
 
-### 3.7 Workflow des taches
-
-Complement a la section 3.4 (Vue Actions / Kanban) concernant le flux de travail :
-
-- Une action est creee par un admin, assignee a un intervenant
-- L'intervenant peut modifier le statut et le commentaire de ses taches (via fichier inbox)
-- Flux : A faire -> En cours -> A valider -> Termine / Rejete
-- Vue "Mes taches" pour chaque intervenant (filtree sur son login)
-
----
-
-## 4. Architecture technique
-
-### 4.1 Stack
-
-- **Backend** : Python Flask
-- **Frontend** : HTML/CSS/JS + SVG pour les roues
-- **Base de donnees** : SQLite (fichier unique `.db`)
-- **Deploiement** : Standalone (serveur local, ouverture navigateur auto)
-- **Hebergement** : OneDrive/SharePoint (sources + executable + DB + dossiers inbox/outbox)
-
-### 4.2 Gestion des utilisateurs
-
-- Identification automatique par login Windows/O365 (pas d'authentification manuelle)
-- Table `utilisateurs` avec login et role
-
-| Role | Droits |
-|------|--------|
-| Admin | Tout : evaluer, creer des taches, valider inbox, enregistrer revues, gerer utilisateurs, generer CR |
-| Intervenant | Consulter toutes les vues, mettre a jour ses taches (via fichier inbox) |
-
-- Plusieurs admins possibles (chef de projet principal + suppleants)
-- Pas de mecanisme de verrou : les admins ne sont jamais deux a ecrire simultanement
-
-### 4.3 Pattern Inbox/Outbox (echanges via OneDrive)
-
-```
-OneDrive partage/
-  |
-  +-- app/                     <- Application (tout le monde)
-  +-- data/
-  |     +-- roue_csi.db        <- Base SQLite (ecriture admin uniquement)
-  +-- inbox/                   <- Modifications des intervenants
-  |     +-- 2026-02-16_dupont_IQ_INC_1.json
-  |     +-- ...
-  +-- outbox/                  <- Notifications vers les intervenants
-        +-- dupont/
-        |     +-- task_2026-02-16_IQ_INC_1.json
-        +-- martin/
-              +-- ...
-```
-
-**Flux intervenant -> admin :**
-1. L'intervenant met a jour une tache dans l'app
-2. L'app genere un fichier JSON dans `inbox/`
-3. Power Automate notifie le chef de projet (email)
-4. Le chef de projet ouvre l'app, voit les modifications en attente
-5. Ecran de validation avec diff : valide ou rejette chaque modification
-6. Les fichiers traites sont archives
-
-**Flux admin -> intervenant :**
-1. Le chef de projet cree/assigne une tache
-2. Un fichier est genere dans `outbox/{login_intervenant}/`
-3. Power Automate peut envoyer un email memo a l'intervenant
-4. L'intervenant voit ses taches dans la vue "Mes taches"
-
-### 4.4 Format des fichiers d'echange (JSON)
-
-**Mise a jour de tache :**
-```json
-{
-  "auteur": "p.dupont",
-  "date": "2026-02-16T14:30:00",
-  "type": "task_update",
-  "indicateur": "IQ_INC_1",
-  "etape": 3,
-  "task_id": 42,
-  "statut": "a_valider",
-  "commentaire": "Extraction SCCM mise en place"
-}
-```
-
-**Nouvelle tache assignee :**
-```json
-{
-  "auteur": "chef.projet",
-  "date": "2026-02-16T10:00:00",
-  "type": "task_assign",
-  "indicateur": "IQ_INC_1",
-  "etape": 3,
-  "titre": "Mettre en place l'extraction SCCM",
-  "assignee": "p.dupont",
-  "commentaire": "A faire avant la prochaine revue"
-}
-```
-
-### 4.5 Notifications (Power Automate)
-
-- Declencheur : creation d'un fichier dans le dossier `inbox/` sur OneDrive
-- Action : email au(x) chef(s) de projet
-- Optionnel : declencheur sur `outbox/{intervenant}/` pour email memo a l'intervenant
-- Configuration a faire avec accompagnement (l'utilisateur ne maitrise pas Power Automate)
-
----
-
-## 5. Decisions prises
-
-| Sujet | Decision | Justification |
-|-------|----------|---------------|
-| Framework | Flask | Templates Jinja2 natifs, ideal pour rendu serveur HTML/SVG, simple pour app standalone |
-| Base de donnees | SQLite | Natif Python, portable, un seul fichier, fiable |
-| Interface | Web (HTML/SVG/JS) | SVG ideal pour la roue, drill-down naturel en web |
-| Deploiement | Standalone | Pas de serveur disponible |
-| Hebergement | OneDrive | Seul stockage partage disponible |
-| Ecriture DB | Admin uniquement | Evite les problemes de concurrence SQLite |
-| Echanges | Fichiers JSON inbox/outbox | Compatible OneDrive, tracable, validable |
-| Verrou DB | Non | Risque de conflit negligeable (~1/10000) |
-| Commentaires SVG | Blocs autour de la roue avec lignes | Fidelite avec l'Excel original, pas de chevauchement |
-| Kanban | 5 statuts avec validation | A faire / En cours / A valider / Termine / Rejete |
-| Historique | Enregistrement global par revue | Snapshot complet de tous les indicateurs a une date |
-| CR | Generation auto a l'enregistrement | Diff avec revue precedente, format HTML/PDF |
-| Notifications | Power Automate | Ecosysteme Microsoft deja en place |
-| Multi-admin | Oui, par role | Suppleance en cas d'absence |
-| Identification | Login Windows/O365 auto | Pas de mot de passe a gerer |
-| Commentaires 3 couches | Global / Categorie / Indicateur par etape | Saisie unique propagee, deblocage partiel possible |
-| Tooltips | Sur indicateurs et etapes | Lisibilite, acces rapide a l'intitule complet |
-| Referentiels externes | Tables statuts_etape, etats_indicateur, types_indicateur | Modifiable sans toucher au code, extensible |
-| Snapshots | indicateur_etapes + proprietes indicateurs | Photo complete a chaque revue, pas de snapshot Kanban |
-| Tri indicateurs | Alphabetique par code | Pas de champ ordre, tri naturel |
-
-### 3.8 Patterns de projet
+### 3.7 Patterns de projet
 
 Systeme de modeles pre-configures permettant d'adapter la roue CSI a differents types de projets. Le moteur (7 etapes, couleurs, categories, actions) reste identique, seul le contenu initial change.
 
@@ -363,37 +271,179 @@ Systeme de modeles pre-configures permettant d'adapter la roue CSI a differents 
 - Les textes des tooltips des 7 etapes adaptes au contexte du pattern
 - Un catalogue de categories possibles (ex: Service Desk, Help-Desk, Proximite, N2, N3, Gestion stocks, Suivi CMDB, Supply Chain...)
 - Des indicateurs pre-definis dans chaque categorie du catalogue
+- Des regles de ciblage/conformite par defaut (au niveau categorie et indicateur)
 - Des actions recurrentes pre-definies (optionnel)
+- Un template de CR (sections, niveau de detail)
 
 **A la creation d'un projet :**
-1. L'utilisateur choisit un pattern
+1. L'utilisateur choisit un pattern (ou "projet vide")
 2. Il selectionne les categories pertinentes dans le catalogue du pattern
-3. Le projet est cree avec les categories et indicateurs selectionnes
+3. Le projet est cree avec les categories, indicateurs et regles selectionnes
 
 **Apres creation :**
-- Le projet vit sa vie independamment du pattern (categories, indicateurs, actions modifiables librement)
+- Le projet vit sa vie independamment du pattern (tout est modifiable librement)
 - Le pattern n'est qu'une reference d'origine
 
 **Scope :** Les patterns sont globaux (disponibles pour tous les clients).
 
+### 3.8 Vues de reporting
+
+Trois vues complementaires au Kanban pour le pilotage du projet :
+
+**Vue PERT / Jalons :**
+- Vue temporelle des actions avec leurs dependances (predecesseurs)
+- Affichage des grands jalons (taches chapeau) sur une timeline
+- Possibilite de developper un jalon pour voir ses sous-taches
+- Chemin critique mis en evidence (enchainement d'actions le plus long)
+- Visualisation des actions bloquees par des predecesseurs non termines
+
+**Vue Intervenant ("Mes actions") :**
+- Filtree sur un intervenant (par defaut : l'utilisateur connecte)
+- Actions realisees (historique) et actions a venir
+- Groupees par statut et/ou par projet
+- Accessible par chaque membre pour suivre sa charge
+
+**Vue Manager (charge des intervenants) :**
+- Vue synthetique de la charge active de chaque intervenant
+- Nombre d'actions par statut et par intervenant
+- Identification des surcharges et des intervenants disponibles
+- Filtrable par periode (actions en cours, a venir)
+
+### 3.9 Gestion des membres et authentification
+
+**Roles :**
+
+| Role | Droits |
+|------|--------|
+| Admin | Tout : evaluer, creer des actions, valider, enregistrer revues, gerer membres, generer CR |
+| Membre | Consulter toutes les vues, modifier ses actions, mettre a jour les statuts |
+| Lecteur | Consulter toutes les vues en lecture seule |
+| Information | Pas d'acces a l'application, destinataire des CR par email uniquement |
+
+- Plusieurs admins possibles (chef de projet principal + suppleants)
+- Createur d'un projet = admin automatique
+
+**Authentification :**
+- Login par email + mot de passe (hash werkzeug PBKDF2)
+- Setup wizard au premier lancement (creation admin initial)
+- Invitations par lien (token 7j, generation par admin, email mailto pre-rempli)
+- SSO Microsoft (MSAL, actif si variables Azure dans .env)
+- Emails secondaires : un membre peut avoir plusieurs adresses, connexion transparente via n'importe laquelle
+
+**Circuit d'ajout d'un membre :**
+1. Admin ajoute le membre (email, nom, trigramme, role)
+2. Si role admin/membre : invitation generee automatiquement (lien copie + mailto)
+3. Si role lecteur/information : enregistrement direct sans invitation (configurable)
+4. Le membre recoit le lien, definit son mot de passe → compte active
+
+### 3.10 Notifications
+
+- **Invitation** : email mailto pre-rempli a l'ajout d'un membre (actuel)
+- **CR apres snapshot** : envoi automatique aux membres "information" et optionnellement aux autres
+- **Actions assignees** : notification a l'intervenant quand une action lui est assignee
+- **Evolution future** : envoi SMTP automatique quand configure (variables .env), mailto en fallback
+
 ---
 
-## 6. Etapes de realisation (a affiner)
+## 4. Architecture technique
 
-- [x] Modele de donnees detaille (12 tables, schema.sql + seed.sql)
-- [x] Choix framework : Flask
-- [x] Structure du projet Python (app/, data/, tests/)
-- [ ] Composant SVG de la roue (reutilisable aux 3 niveaux)
-- [ ] Backend API
-- [ ] Vues : Global, Categorie, Indicateur, Kanban
-- [ ] Systeme inbox/outbox
-- [ ] Gestion utilisateurs et roles
-- [ ] Historique et enregistrement global
-- [ ] Generation du CR
-- [ ] Notifications Power Automate
-- [ ] Import des donnees existantes (Excel -> SQLite)
-- [ ] Patterns de projet (modeles pre-configures avec categories/indicateurs/actions)
+### 4.1 Stack
+
+- **Backend** : Python Flask + gunicorn
+- **Frontend** : HTML/CSS/JS + SVG pour les roues
+- **Base de donnees** : PostgreSQL 16 (schema `common` + un schema par client)
+- **Deploiement** : Docker (Dockerfile + docker-compose) ou standalone local
+- **Authentification** : email+mdp (PBKDF2), SSO Microsoft (MSAL optionnel)
+
+### 4.2 Architecture PostgreSQL
+
+**Schemas :**
+- `common` : tables partagees (utilisateurs, clients, client_membres, invitations, tables de reference)
+- `client_<slug>` : un schema par client (projets, projet_membres, categories, indicateurs, actions, revues)
+
+**Connexion :** `SET search_path = client_schema, common` — resout les tables metier dans le schema client et les references dans common.
+
+**Migration idempotente :** `migrate_client_schema()` applique les DDL (IF NOT EXISTS) + ALTER TABLE (ADD COLUMN IF NOT EXISTS) a chaque demarrage, garantissant la compatibilite.
+
+### 4.3 Notifications
+
+- **Court terme** : mailto pre-rempli (zero config, fonctionne immediatement)
+- **Moyen terme** : envoi SMTP automatique (variables SMTP_HOST, SMTP_PORT, etc. dans .env)
+- **Long terme** : integration Power Automate pour workflows avances
+
+---
+
+## 5. Decisions prises
+
+| Sujet | Decision | Justification |
+|-------|----------|---------------|
+| Framework | Flask | Templates Jinja2, ideal pour rendu serveur HTML/SVG |
+| Base de donnees | PostgreSQL | Multi-schema, robuste, deploiement Docker |
+| Interface | Web (HTML/SVG/JS) | SVG ideal pour la roue, drill-down naturel |
+| Deploiement | Docker + standalone | Docker pour VPS, standalone pour dev local |
+| Commentaires SVG | Blocs autour de la roue avec lignes | Fidelite avec l'Excel original |
+| Kanban | 5 statuts avec validation | A faire / En cours / A valider / Termine / Rejete |
+| Dependances actions | Predecesseurs bloquants | Distinct de parent/enfant (sequencement vs decomposition) |
+| Historique | Enregistrement global par revue | Snapshot complet de tous les indicateurs a une date |
+| CR | Generation auto a l'enregistrement | Diff avec revue precedente, template defini par pattern |
+| Ciblage/Conformite | Heritable (Global → Categorie → Indicateur) | Evite la repetition, double definition fonc/tech |
+| Notifications | Mailto → SMTP → Power Automate | Progression par paliers de complexite |
+| Commentaires 3 couches | Global / Categorie / Indicateur par etape | Saisie unique propagee, deblocage partiel possible |
+| Referentiels externes | Tables statuts, etats, types | Modifiable sans toucher au code |
+| Snapshots | indicateur_etapes + proprietes indicateurs | Photo complete, pas de snapshot Kanban |
+| Patterns | Globaux, catalogue de categories selectionnable | Template de demarrage, projet independant ensuite |
+| Authentification | Email+mdp, invitations lien, SSO Microsoft optionnel | Compatible local et cloud |
+| Roles | 4 niveaux (admin/membre/lecteur/information) | Information = destinataire CR, pas d'acces app |
+
+---
+
+## 6. Etapes de realisation
+
+### Realise
+
+- [x] Analyse du fichier Excel original
+- [x] Modele de donnees (PostgreSQL multi-schema)
+- [x] Framework : Flask + psycopg3
+- [x] Structure du projet Python
+- [x] Composant SVG de la roue (reutilisable aux 3 niveaux)
+- [x] Backend API (routes Flask : step save, actions CRUD, user search, clients/projets)
+- [x] Vues : Global, Categorie, Indicateur, Kanban (3 niveaux), Referentiel, Login, Accueil
+- [x] Gestion multi-clients / multi-projets (schemas PostgreSQL)
+- [x] Kanban : drag & drop, autocomplete assignee, assignation par email, dates debut/fin, taches chapeau
+- [x] Gestion membres : 4 roles, controle d'acces, page admin, invitation (lien + mailto)
+- [x] Bulles commentaires sur roues globale/categorie + edition directe
+- [x] Heritage couleurs global → categorie, modale avec onglets couche
+- [x] Dates membres + emails secondaires
+- [x] Edition client/projet depuis l'accueil + description projet
+- [x] Migration SQLite → PostgreSQL (db.py, 4 services, routes, templates)
+- [x] Authentification (email+mdp, invitations par lien, setup wizard, SSO Microsoft prepare)
+- [x] Dockerisation (Dockerfile + docker-compose + gunicorn)
+- [x] Migration auto des schemas au demarrage (migrate_all_schemas)
+- [x] CRUD categories dans le referentiel (ajout, renommage, reordonnancement, suppression)
+
+### A faire — Priorite haute
+
+- [ ] Dependances entre actions (predecesseurs bloquants)
+- [ ] Ciblage/conformite heritables (global → categorie → indicateur)
+- [ ] Double definition ciblage : fonctionnelle + technique
+- [ ] Historique et snapshots (backend + integration UI)
+- [ ] Generation du CR (diff entre snapshots, template par pattern)
+
+### A faire — Priorite moyenne
+
+- [ ] Patterns de projet (modeles pre-configures avec categories/indicateurs/actions/CR)
+- [ ] Vue PERT / Jalons (timeline des actions avec dependances)
+- [ ] Vue Intervenant ("Mes actions" : realisees et a venir)
+- [ ] Vue Manager (charge active des intervenants)
+- [ ] Envoi SMTP automatique (emails invitation, CR, notifications)
+- [ ] Deploiement VPS
+
+### A faire — Priorite basse
+
+- [ ] Import des donnees existantes (Excel → PostgreSQL)
+- [ ] Notifications Power Automate (workflows avances)
 - [ ] Tests et packaging
+- [ ] Nettoyage fichiers legacy SQLite (schema.sql, seed.sql, seed_demo.sql)
 
 ---
 
@@ -407,12 +457,4 @@ Plusieurs prototypes HTML interactifs ont ete crees dans le dossier `prototype/`
 | `proto-1-toggle-panel.html` | Approche toggle [Roue][Tableau] + panneau lateral glissant | Explore, non retenu |
 | `proto-2-referentiel-panel.html` | Approche 2 onglets topbar + panneau lateral glissant | Explore, non retenu |
 | **`proto-3-fiche-fixe.html`** | **Approche retenue** : 2 onglets topbar (Roue CSI / Referentiel) + fiche fixe verticale + compteurs inline | **Approche retenue** |
-
-**Approche retenue (proto-3)** illustre :
-- 2 onglets : Roue CSI / Referentiel
-- Layout a 3 colonnes (Sidebar | Fiche fixe | Roue) au niveau indicateur
-- Fiche verticale avec proprietes, ciblage, conformite, lien Kanban
-- Compteurs inline dans la barre de titre
-- Referentiel avec recherche, filtres (categorie, type, etat) et statistiques dynamiques
-- Roue SVG avec systeme 3 couches, commentaires SVG relies par lignes pointillees
-- Drill-down recursif et navigation par breadcrumb
+| **`prototype-consolide.html`** | **Prototype de reference** : consolide toutes les fonctionnalites validees (roue, historique, lecture seule) | **Reference** |
