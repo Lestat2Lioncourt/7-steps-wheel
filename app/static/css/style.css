@@ -1073,6 +1073,74 @@ body {
 .role-text-badge.role-lecteur { background: #302a1040; color: #eab308; }
 .role-text-badge.role-information { background: #2a201040; color: #ffc107; }
 
+/* ---- CIBLAGE / CONFORMITE ---- */
+.cc-tag {
+    display: inline-block;
+    width: 16px;
+    height: 14px;
+    border-radius: 3px;
+    text-align: center;
+    line-height: 14px;
+    font-size: 9px;
+    font-weight: 700;
+    color: #fff;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+.cc-fonc { background: #3a7bd5; }
+.cc-tech { background: #e94560; }
+.cc-tag-mini {
+    display: inline-block;
+    width: 14px;
+    height: 12px;
+    border-radius: 2px;
+    text-align: center;
+    line-height: 12px;
+    font-size: 8px;
+    font-weight: 700;
+    color: #fff;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+.cc-tag-mini.cc-tech { background: #e94560; }
+.cc-origin {
+    font-size: 10px;
+    color: #a78bfa;
+    font-style: italic;
+    margin-left: 4px;
+}
+.cc-form-section { margin-bottom: 14px; }
+.cc-form-section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #888;
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+.cc-form-row { display: flex; gap: 12px; }
+.cc-form-field { flex: 1; }
+.cc-form-field label {
+    display: block;
+    font-size: 10px;
+    color: #888;
+    margin-bottom: 3px;
+}
+.cc-form-field .modal-comment {
+    min-height: 60px;
+    border-radius: 6px;
+    margin-bottom: 0;
+    margin-top: 0;
+}
+.fiche-edit-icon {
+    cursor: pointer;
+    color: #555;
+    font-size: 12px;
+    margin-left: 6px;
+    transition: color .15s;
+}
+.fiche-edit-icon:hover { color: #a0c4ff; }
+
 /* ---- COLORS ---- */
 .c-none { background: #333; }
 .c-grey { background: #6b7280; }

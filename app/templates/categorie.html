@@ -39,6 +39,9 @@
         <h2>{{ data.categorie.nom }}</h2>
         <div class="subtitle">{{ data.total }} indicateurs</div>
     </div>
+    {% if session.get('user_role') != 'lecteur' %}
+    <button class="kanban-new-btn" style="background:#0f3460;margin-right:6px" onclick="openCiblageModal('categorie', {{ data.categorie.id }})">Ciblage / Conformite</button>
+    {% endif %}
     <a class="kanban-new-btn" href="{{ url_for('main.vue_kanban_categorie', id=data.categorie.id) }}" style="text-decoration:none">Actions (Kanban)</a>
 </div>
 <div class="wheel-area">

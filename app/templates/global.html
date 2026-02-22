@@ -26,6 +26,9 @@
         <h2>Vue Globale</h2>
         <div class="subtitle">{{ data.total }} indicateurs</div>
     </div>
+    {% if session.get('user_role') != 'lecteur' %}
+    <button class="kanban-new-btn" style="background:#0f3460;margin-right:6px" onclick="openCiblageModal('projet')">Ciblage / Conformite</button>
+    {% endif %}
     <a class="kanban-new-btn" href="{{ url_for('main.vue_kanban_global') }}" style="text-decoration:none">Actions (Kanban)</a>
 </div>
 <div class="wheel-area">

@@ -55,13 +55,47 @@
             <label>Categorie</label>
             <div class="val">{{ data.categorie.nom }}</div>
         </div>
+        {% set rc = ind.resolved.ciblage_fonctionnel %}
+        {% set rct = ind.resolved.ciblage_technique %}
         <div class="fiche-field">
-            <label>Condition de ciblage</label>
-            <div class="val-box">{{ ind.ciblage }}</div>
+            <label>Condition de ciblage
+                {% if session.get('user_role') != 'lecteur' %}
+                <span class="fiche-edit-icon" onclick="openCiblageModal('indicateur', {{ ind.id }})" title="Editer">&#9998;</span>
+                {% endif %}
+            </label>
+            {% if rc.value or rct.value %}
+            <div class="val-box">
+                {% if rc.value %}
+                <div><span class="cc-tag cc-fonc">F</span> {{ rc.value }}{% if not rc.propre %} <span class="cc-origin">&larr; {{ rc.origine }}</span>{% endif %}</div>
+                {% endif %}
+                {% if rct.value %}
+                <div><span class="cc-tag cc-tech">T</span> {{ rct.value }}{% if not rct.propre %} <span class="cc-origin">&larr; {{ rct.origine }}</span>{% endif %}</div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="val-box" style="color:#555;font-style:italic">Non defini</div>
+            {% endif %}
         </div>
+        {% set rcf = ind.resolved.conformite_fonctionnel %}
+        {% set rcft = ind.resolved.conformite_technique %}
         <div class="fiche-field">
-            <label>Condition de conformite</label>
-            <div class="val-box">{{ ind.conformite }}</div>
+            <label>Condition de conformite
+                {% if session.get('user_role') != 'lecteur' %}
+                <span class="fiche-edit-icon" onclick="openCiblageModal('indicateur', {{ ind.id }})" title="Editer">&#9998;</span>
+                {% endif %}
+            </label>
+            {% if rcf.value or rcft.value %}
+            <div class="val-box">
+                {% if rcf.value %}
+                <div><span class="cc-tag cc-fonc">F</span> {{ rcf.value }}{% if not rcf.propre %} <span class="cc-origin">&larr; {{ rcf.origine }}</span>{% endif %}</div>
+                {% endif %}
+                {% if rcft.value %}
+                <div><span class="cc-tag cc-tech">T</span> {{ rcft.value }}{% if not rcft.propre %} <span class="cc-origin">&larr; {{ rcft.origine }}</span>{% endif %}</div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="val-box" style="color:#555;font-style:italic">Non defini</div>
+            {% endif %}
         </div>
         <a class="fiche-actions-link" href="{{ url_for('main.vue_kanban', id=ind.id) }}">
             Actions (Kanban) &rsaquo;

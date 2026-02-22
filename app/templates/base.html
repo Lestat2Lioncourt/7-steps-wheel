@@ -97,6 +97,51 @@
     </div>
 </div>
 
+<!-- CIBLAGE/CONFORMITE MODAL -->
+<div class="modal-overlay" id="ciblage-modal-overlay" onclick="if(event.target===this)closeCiblageModal()">
+    <div class="modal" style="width:560px">
+        <h3 id="ciblage-modal-title">Ciblage / Conformite</h3>
+        <div class="modal-note" id="ciblage-modal-note">Les valeurs definies ici sont heritees par les niveaux inferieurs (sauf s'ils definissent les leurs).</div>
+        <div class="cc-form-section">
+            <div class="cc-form-section-title">Ciblage</div>
+            <div class="cc-form-row">
+                <div class="cc-form-field">
+                    <label><span class="cc-tag cc-fonc">F</span> Fonctionnel</label>
+                    <textarea id="cc-ciblage-fonc" class="modal-comment" placeholder="Condition de ciblage fonctionnelle..."></textarea>
+                </div>
+                <div class="cc-form-field">
+                    <label><span class="cc-tag cc-tech">T</span> Technique</label>
+                    <textarea id="cc-ciblage-tech" class="modal-comment" placeholder="Condition de ciblage technique..."></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="cc-form-section">
+            <div class="cc-form-section-title">Conformite</div>
+            <div class="cc-form-row">
+                <div class="cc-form-field">
+                    <label><span class="cc-tag cc-fonc">F</span> Fonctionnel</label>
+                    <textarea id="cc-conformite-fonc" class="modal-comment" placeholder="Condition de conformite fonctionnelle..."></textarea>
+                </div>
+                <div class="cc-form-field">
+                    <label><span class="cc-tag cc-tech">T</span> Technique</label>
+                    <textarea id="cc-conformite-tech" class="modal-comment" placeholder="Condition de conformite technique..."></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="modal-actions">
+            {% if session.get('user_role') != 'lecteur' %}
+            <button class="btn-clear" onclick="clearCiblage()">Vider ce niveau</button>
+            <span style="flex:1"></span>
+            <button class="btn btn-secondary" onclick="closeCiblageModal()">Annuler</button>
+            <button class="btn btn-primary" onclick="saveCiblage()">Enregistrer</button>
+            {% else %}
+            <span style="flex:1"></span>
+            <button class="btn btn-secondary" onclick="closeCiblageModal()">Fermer</button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
 <script>
     window._userRole = '{{ session.get("user_role", "") }}';
     window._userRealRole = '{{ session.get("user_real_role", "") }}';

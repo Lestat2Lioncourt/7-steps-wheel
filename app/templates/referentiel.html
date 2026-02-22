@@ -86,8 +86,12 @@
                 <td style="color:#777;font-size:11px">{{ ind.categorie_nom }}</td>
                 <td><span class="type-badge {{ ind.type_class }}">{{ ind.type }}</span></td>
                 <td><span class="etat-badge {{ ind.etat_class }}">{{ ind.etat }}</span></td>
-                <td style="font-size:11px;color:#999;max-width:140px" title="{{ ind.ciblage }}">{{ ind.ciblage[:23] ~ '...' if ind.ciblage|length > 25 else ind.ciblage }}</td>
-                <td style="font-size:11px;color:#999;max-width:140px" title="{{ ind.conformite }}">{{ ind.conformite[:23] ~ '...' if ind.conformite|length > 25 else ind.conformite }}</td>
+                {% set rcib = ind.resolved.ciblage_fonctionnel %}
+                {% set rcibt = ind.resolved.ciblage_technique %}
+                <td style="font-size:11px;color:#999;max-width:160px" title="{% if rcib.value %}[F] {{ rcib.value }}{% endif %}{% if rcibt.value %}&#10;[T] {{ rcibt.value }}{% endif %}">{% if rcib.value %}{{ rcib.value[:23] ~ '...' if rcib.value|length > 25 else rcib.value }}{% endif %}{% if rcibt.value %} <span class="cc-tag-mini cc-tech">T</span>{% endif %}</td>
+                {% set rconf = ind.resolved.conformite_fonctionnel %}
+                {% set rconft = ind.resolved.conformite_technique %}
+                <td style="font-size:11px;color:#999;max-width:160px" title="{% if rconf.value %}[F] {{ rconf.value }}{% endif %}{% if rconft.value %}&#10;[T] {{ rconft.value }}{% endif %}">{% if rconf.value %}{{ rconf.value[:23] ~ '...' if rconf.value|length > 25 else rconf.value }}{% endif %}{% if rconft.value %} <span class="cc-tag-mini cc-tech">T</span>{% endif %}</td>
                 <td><a class="roue-link" href="{{ url_for('main.vue_indicateur', id=ind.id) }}" onclick="event.stopPropagation()">Roue</a></td>
             </tr>
             {% endfor %}

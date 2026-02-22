@@ -780,6 +780,85 @@ function showCatDrill(stepIdx, drillData, catLayerValues, categorie_id, globalLa
 // containerId : id du div
 // counts : { green: N, yellow: N, ... }
 // -------------------------------------------------------------------
+// ===================================================================
+// CIBLAGE / CONFORMITE MODAL
+// ===================================================================
+
+var _ciblageModal = { level: null, entityId: null };
+
+function openCiblageModal(level, entityId) {
+    _ciblageModal.level = level;
+    _ciblageModal.entityId = entityId || null;
+
+    var titleMap = { projet: 'Projet', categorie: 'Categorie', indicateur: 'Indicateur' };
+    document.getElementById('ciblage-modal-title').textContent =
+        'Ciblage / Conformite — ' + (titleMap[level] || level);
+
+    var noteMap = {
+        projet: 'Ces valeurs seront heritees par toutes les categories et indicateurs (sauf ceux qui definissent les leurs).',
+        categorie: 'Ces valeurs seront heritees par les indicateurs de cette categorie (sauf ceux qui definissent les leurs).',
+        indicateur: 'Ces valeurs sont propres a cet indicateur. Videz-les pour revenir a l\'heritage.'
+    };
+    document.getElementById('ciblage-modal-note').textContent = noteMap[level] || '';
+
+    // Build URL
+    var url;
+    if (level === 'projet') url = '/api/projet/ciblage';
+    else if (level === 'categorie') url = '/api/categorie/' + entityId + '/ciblage';
+    else url = '/api/indicateur/' + entityId + '/ciblage';
+
+    // Fetch current values
+    fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        document.getElementById('cc-ciblage-fonc').value = data.ciblage_fonctionnel || '';
+        document.getElementById('cc-ciblage-tech').value = data.ciblage_technique || '';
+        document.getElementById('cc-conformite-fonc').value = data.conformite_fonctionnel || '';
+        document.getElementById('cc-conformite-tech').value = data.conformite_technique || '';
+        document.getElementById('ciblage-modal-overlay').classList.add('open');
+    });
+}
+
+function closeCiblageModal() {
+    document.getElementById('ciblage-modal-overlay').classList.remove('open');
+}
+
+function saveCiblage() {
+    var level = _ciblageModal.level;
+    var entityId = _ciblageModal.entityId;
+
+    var url;
+    if (level === 'projet') url = '/api/projet/ciblage';
+    else if (level === 'categorie') url = '/api/categorie/' + entityId + '/ciblage';
+    else url = '/api/indicateur/' + entityId + '/ciblage';
+
+    var body = {
+        ciblage_fonctionnel: document.getElementById('cc-ciblage-fonc').value.trim() || null,
+        ciblage_technique: document.getElementById('cc-ciblage-tech').value.trim() || null,
+        conformite_fonctionnel: document.getElementById('cc-conformite-fonc').value.trim() || null,
+        conformite_technique: document.getElementById('cc-conformite-tech').value.trim() || null
+    };
+
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.ok) location.reload();
+        else alert(d.error || 'Erreur');
+    });
+}
+
+function clearCiblage() {
+    document.getElementById('cc-ciblage-fonc').value = '';
+    document.getElementById('cc-ciblage-tech').value = '';
+    document.getElementById('cc-conformite-fonc').value = '';
+    document.getElementById('cc-conformite-tech').value = '';
+    saveCiblage();
+}
+
 function buildInlineCounters(containerId, counts) {
     var el = document.getElementById(containerId);
     el.innerHTML = STATUS_ORDER.map(function(c) {

@@ -7,11 +7,15 @@
 
 -- Projets du client
 CREATE TABLE IF NOT EXISTS projets (
-    id              SERIAL PRIMARY KEY,
-    nom             TEXT NOT NULL,
-    description     TEXT,
-    date_creation   TEXT NOT NULL,
-    actif           BOOLEAN DEFAULT TRUE
+    id                      SERIAL PRIMARY KEY,
+    nom                     TEXT NOT NULL,
+    description             TEXT,
+    ciblage_fonctionnel     TEXT,
+    ciblage_technique       TEXT,
+    conformite_fonctionnel  TEXT,
+    conformite_technique    TEXT,
+    date_creation           TEXT NOT NULL,
+    actif                   BOOLEAN DEFAULT TRUE
 );
 
 -- Membres d'un projet (role specifique au projet)
@@ -28,25 +32,31 @@ CREATE TABLE IF NOT EXISTS projet_membres (
 
 -- Categories d'indicateurs
 CREATE TABLE IF NOT EXISTS categories (
-    id          SERIAL PRIMARY KEY,
-    projet_id   INTEGER NOT NULL REFERENCES projets(id) ON DELETE CASCADE,
-    nom         TEXT NOT NULL,
-    ordre       INTEGER DEFAULT 0,
+    id                      SERIAL PRIMARY KEY,
+    projet_id               INTEGER NOT NULL REFERENCES projets(id) ON DELETE CASCADE,
+    nom                     TEXT NOT NULL,
+    ordre                   INTEGER DEFAULT 0,
+    ciblage_fonctionnel     TEXT,
+    ciblage_technique       TEXT,
+    conformite_fonctionnel  TEXT,
+    conformite_technique    TEXT,
     UNIQUE(projet_id, nom)
 );
 
 -- Indicateurs
 CREATE TABLE IF NOT EXISTS indicateurs (
-    id              SERIAL PRIMARY KEY,
-    projet_id       INTEGER NOT NULL REFERENCES projets(id) ON DELETE CASCADE,
-    code            TEXT NOT NULL,
-    description     TEXT,
-    chapitre        TEXT,
-    categorie_id    INTEGER NOT NULL REFERENCES categories(id),
-    etat_id         INTEGER NOT NULL REFERENCES common.etats_indicateur(id),
-    type_id         INTEGER NOT NULL REFERENCES common.types_indicateur(id),
-    ciblage         TEXT,
-    conformite      TEXT,
+    id                      SERIAL PRIMARY KEY,
+    projet_id               INTEGER NOT NULL REFERENCES projets(id) ON DELETE CASCADE,
+    code                    TEXT NOT NULL,
+    description             TEXT,
+    chapitre                TEXT,
+    categorie_id            INTEGER NOT NULL REFERENCES categories(id),
+    etat_id                 INTEGER NOT NULL REFERENCES common.etats_indicateur(id),
+    type_id                 INTEGER NOT NULL REFERENCES common.types_indicateur(id),
+    ciblage_fonctionnel     TEXT,
+    ciblage_technique       TEXT,
+    conformite_fonctionnel  TEXT,
+    conformite_technique    TEXT,
     UNIQUE(projet_id, code)
 );
 
@@ -101,17 +111,19 @@ CREATE TABLE IF NOT EXISTS revues (
 );
 
 CREATE TABLE IF NOT EXISTS revue_indicateurs (
-    id              SERIAL PRIMARY KEY,
-    revue_id        INTEGER NOT NULL REFERENCES revues(id) ON DELETE CASCADE,
-    indicateur_id   INTEGER NOT NULL REFERENCES indicateurs(id),
-    code            TEXT,
-    description     TEXT,
-    chapitre        TEXT,
-    categorie_id    INTEGER REFERENCES categories(id),
-    etat_id         INTEGER REFERENCES common.etats_indicateur(id),
-    type_id         INTEGER REFERENCES common.types_indicateur(id),
-    ciblage         TEXT,
-    conformite      TEXT,
+    id                      SERIAL PRIMARY KEY,
+    revue_id                INTEGER NOT NULL REFERENCES revues(id) ON DELETE CASCADE,
+    indicateur_id           INTEGER NOT NULL REFERENCES indicateurs(id),
+    code                    TEXT,
+    description             TEXT,
+    chapitre                TEXT,
+    categorie_id            INTEGER REFERENCES categories(id),
+    etat_id                 INTEGER REFERENCES common.etats_indicateur(id),
+    type_id                 INTEGER REFERENCES common.types_indicateur(id),
+    ciblage_fonctionnel     TEXT,
+    ciblage_technique       TEXT,
+    conformite_fonctionnel  TEXT,
+    conformite_technique    TEXT,
     UNIQUE(revue_id, indicateur_id)
 );
 

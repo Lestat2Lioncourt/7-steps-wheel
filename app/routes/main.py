@@ -28,6 +28,12 @@ from app.services.indicateur_service import (
     get_step_layer_values_cat,
     get_referentiel_data,
     save_step as svc_save_step,
+    get_project_ciblage_conformite,
+    save_project_ciblage_conformite,
+    get_categorie_ciblage_conformite,
+    save_categorie_ciblage_conformite,
+    get_indicateur_ciblage_conformite,
+    save_indicateur_ciblage_conformite,
 )
 from app.services.action_service import (
     get_actions_for_indicator,
@@ -635,6 +641,48 @@ def save_step():
 
 
 # -------------------------------------------------------------------
+# Ciblage / Conformite — 3 niveaux (projet, categorie, indicateur)
+# -------------------------------------------------------------------
+@main_bp.route('/api/projet/ciblage', methods=['GET'])
+def api_get_projet_ciblage():
+    return jsonify(get_project_ciblage_conformite())
+
+
+@main_bp.route('/api/projet/ciblage', methods=['POST'])
+@require_write
+def api_save_projet_ciblage():
+    d = request.get_json()
+    save_project_ciblage_conformite(d)
+    return jsonify({'ok': True})
+
+
+@main_bp.route('/api/categorie/<int:cat_id>/ciblage', methods=['GET'])
+def api_get_categorie_ciblage(cat_id):
+    return jsonify(get_categorie_ciblage_conformite(cat_id))
+
+
+@main_bp.route('/api/categorie/<int:cat_id>/ciblage', methods=['POST'])
+@require_write
+def api_save_categorie_ciblage(cat_id):
+    d = request.get_json()
+    save_categorie_ciblage_conformite(cat_id, d)
+    return jsonify({'ok': True})
+
+
+@main_bp.route('/api/indicateur/<int:ind_id>/ciblage', methods=['GET'])
+def api_get_indicateur_ciblage(ind_id):
+    return jsonify(get_indicateur_ciblage_conformite(ind_id))
+
+
+@main_bp.route('/api/indicateur/<int:ind_id>/ciblage', methods=['POST'])
+@require_write
+def api_save_indicateur_ciblage(ind_id):
+    d = request.get_json()
+    save_indicateur_ciblage_conformite(ind_id, d)
+    return jsonify({'ok': True})
+
+
+# -------------------------------------------------------------------
 # Kanban — 3 niveaux
 # -------------------------------------------------------------------
 def _kanban_common():
@@ -825,9 +873,25 @@ def api_add_member():
     if role not in ('admin', 'membre', 'lecteur', 'information'):
         return jsonify({'ok': False, 'error': 'Role invalide'}), 400
     login = email.split('@')[0].lower()
+    want_invite = d.get('generate_invitation', False)
     try:
         add_member(login, nom, email, trigramme, role)
-        return jsonify({'ok': True})
+        invitation_url = None
+        if want_invite:
+            # Recuperer le user_id du membre nouvellement cree
+            conn = get_connection()
+            try:
+                row = conn.execute(
+                    "SELECT id FROM utilisateurs WHERE login = %s OR email = %s",
+                    (login, email)
+                ).fetchone()
+            finally:
+                conn.close()
+            if row:
+                created_by = _get_current_user_id()
+                token = create_invitation(row['id'], created_by)
+                invitation_url = url_for('main.invitation', token=token, _external=True)
+        return jsonify({'ok': True, 'invitation_url': invitation_url})
     except ValueError as e:
         return jsonify({'ok': False, 'error': str(e)}), 400
 

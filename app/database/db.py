@@ -446,6 +446,43 @@ def migrate_client_schema(schema_name):
         # Migrations incrementales (idempotentes)
         conn.execute("ALTER TABLE projets ADD COLUMN IF NOT EXISTS description TEXT")
 
+        # --- Migration ciblage/conformite heritable (projets, categories, indicateurs, revue_indicateurs) ---
+        # Colonnes sur projets et categories
+        for tbl in ('projets', 'categories'):
+            for col in ('ciblage_fonctionnel', 'ciblage_technique', 'conformite_fonctionnel', 'conformite_technique'):
+                conn.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} TEXT")
+
+        # Renommer ciblage -> ciblage_fonctionnel et conformite -> conformite_fonctionnel sur indicateurs et revue_indicateurs
+        for tbl in ('indicateurs', 'revue_indicateurs'):
+            conn.execute(f"""
+                DO $$ BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_schema = current_schema()
+                          AND table_name = '{tbl}'
+                          AND column_name = 'ciblage'
+                    ) THEN
+                        ALTER TABLE {tbl} RENAME COLUMN ciblage TO ciblage_fonctionnel;
+                    END IF;
+                END $$;
+            """)
+            conn.execute(f"""
+                DO $$ BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_schema = current_schema()
+                          AND table_name = '{tbl}'
+                          AND column_name = 'conformite'
+                    ) THEN
+                        ALTER TABLE {tbl} RENAME COLUMN conformite TO conformite_fonctionnel;
+                    END IF;
+                END $$;
+            """)
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS ciblage_fonctionnel TEXT")
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS ciblage_technique TEXT")
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS conformite_fonctionnel TEXT")
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS conformite_technique TEXT")
+
         print(f"Migration schema {schema_name} OK")
     finally:
         conn.close()
