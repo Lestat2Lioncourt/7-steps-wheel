@@ -354,6 +354,28 @@ OneDrive partage/
 | Snapshots | indicateur_etapes + proprietes indicateurs | Photo complete a chaque revue, pas de snapshot Kanban |
 | Tri indicateurs | Alphabetique par code | Pas de champ ordre, tri naturel |
 
+### 3.8 Patterns de projet
+
+Systeme de modeles pre-configures permettant d'adapter la roue CSI a differents types de projets. Le moteur (7 etapes, couleurs, categories, actions) reste identique, seul le contenu initial change.
+
+**Un pattern definit :**
+- Un nom (ex: "Suivi indicateurs", "Migration technique", ...)
+- Les textes des tooltips des 7 etapes adaptes au contexte du pattern
+- Un catalogue de categories possibles (ex: Service Desk, Help-Desk, Proximite, N2, N3, Gestion stocks, Suivi CMDB, Supply Chain...)
+- Des indicateurs pre-definis dans chaque categorie du catalogue
+- Des actions recurrentes pre-definies (optionnel)
+
+**A la creation d'un projet :**
+1. L'utilisateur choisit un pattern
+2. Il selectionne les categories pertinentes dans le catalogue du pattern
+3. Le projet est cree avec les categories et indicateurs selectionnes
+
+**Apres creation :**
+- Le projet vit sa vie independamment du pattern (categories, indicateurs, actions modifiables librement)
+- Le pattern n'est qu'une reference d'origine
+
+**Scope :** Les patterns sont globaux (disponibles pour tous les clients).
+
 ---
 
 ## 6. Etapes de realisation (a affiner)
@@ -370,6 +392,7 @@ OneDrive partage/
 - [ ] Generation du CR
 - [ ] Notifications Power Automate
 - [ ] Import des donnees existantes (Excel -> SQLite)
+- [ ] Patterns de projet (modeles pre-configures avec categories/indicateurs/actions)
 - [ ] Tests et packaging
 
 ---

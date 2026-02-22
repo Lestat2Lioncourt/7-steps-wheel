@@ -33,6 +33,7 @@ Application web Python (Flask + PostgreSQL) pour le suivi de la maturite des ind
 24. **Migration SQLite → PostgreSQL** : toute la couche donnees reecrite (db.py, 4 services, routes, templates accueil/membres)
 25. **Authentification** : login email+mdp (werkzeug PBKDF2), setup wizard, invitations par lien (token 7j), SSO Microsoft (MSAL conditionnel), suppression detection registre Windows/identity.json
 26. **Dockerisation** : Dockerfile (python:3.11-slim + gunicorn), docker-compose (app + PostgreSQL 16), .dockerignore
+27. **Description projet** : champ texte optionnel sur les projets, editable a la creation/modification, affiche sur les cartes accueil (tronque 80 car.)
 
 **Prochaines etapes** : deploiement VPS, historique/snapshots, generation CR.
 
@@ -47,7 +48,7 @@ Application web Python (Flask + PostgreSQL) pour le suivi de la maturite des ind
   - `invitations` : activation de compte par lien (token, expiration, user_id)
   - `etapes`, `statuts_etape`, `etats_indicateur`, `types_indicateur` : tables de reference
 - **`client_<slug>`** : un schema par client, contient les donnees metier
-  - `projets`, `projet_membres` : projets du client et membres par projet
+  - `projets` (id, nom, description, date_creation, actif), `projet_membres` : projets du client et membres par projet
   - `categories`, `indicateurs`, `indicateur_etapes` : donnees de la roue CSI
   - `actions` : kanban (avec `parent_id` pour hierarchie chapeau)
   - `revues` : historique (futur)
@@ -173,10 +174,12 @@ Application web Python (Flask + PostgreSQL) pour le suivi de la maturite des ind
 - [x] **Migration SQLite → PostgreSQL** (db.py, 4 services, routes, templates)
 - [x] Authentification (login email+mdp, invitations par lien, setup wizard, SSO Microsoft prepare)
 - [x] Dockerisation (Dockerfile + docker-compose + gunicorn)
+- [x] Description projet (champ optionnel, creation/edition, affichage accueil, migration idempotente)
 - [ ] Deploiement VPS
 - [ ] Historique et enregistrement global (snapshots)
 - [ ] Generation du CR (compte-rendu diff)
 - [ ] Notifications Power Automate
+- [ ] Patterns de projet (modeles pre-configures avec categories/indicateurs/actions)
 - [ ] Import des donnees existantes (Excel → PostgreSQL)
 - [ ] Tests et packaging
 - [ ] Nettoyage fichiers legacy SQLite (schema.sql, seed.sql, seed_demo.sql)
