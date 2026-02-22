@@ -41,6 +41,9 @@ Desktop.ini
 # Ancienne solution Excel/Access
 _old_version/
 
+# Script de deploiement (contient IP/user du serveur)
+deploy.bat
+
 # Inbox/Outbox (fichiers d'echange runtime)
 inbox/
 outbox/
