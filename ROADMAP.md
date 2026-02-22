@@ -105,6 +105,11 @@ Les categories sont definies librement par l'utilisateur admin (exemples : "Suiv
 - Categorie
 - Etat (Cadre, En attente, Realise, Annule, En cours, A cadrer) — valeurs dans table de reference `etats_indicateur`
 - Type (SLA, KPI, XLA) — valeurs dans table de reference `types_indicateur`
+- Periodicite de mesure (Quotidien, Hebdomadaire, Mensuel, Trimestriel, Semestriel, Annuel) — defaut Mensuel
+- Valeur SLA cible (decimal, ex: 0.95 → affiche 95%)
+- Formule KPI (texte libre decrivant le calcul)
+- Penalite applicable (oui/non)
+- Seuil (en secondes, affiche en format lisible : 3600 → 1h, 90 → 1min 30s)
 - Condition de ciblage (texte descriptif) — heritable depuis la categorie ou le niveau global
 - Condition de conformite (texte descriptif) — heritable depuis la categorie ou le niveau global
 
@@ -194,7 +199,7 @@ Vue dediee au design et parametrage des indicateurs :
 - **Barre de recherche** : recherche par code, description, ciblage
 - **Filtres** : 3 selecteurs (categorie, type SLA/KPI/XLA, etat)
 - **Compteurs dynamiques** : nombre d'indicateurs par statut CSI, mis a jour en fonction des filtres actifs
-- **Tableau complet** avec colonnes : Statut CSI, Chapitre, Code, Description, Categorie, Type, Etat, Ciblage, Conformite
+- **Tableau complet** avec colonnes : Statut CSI, Chapitre, Code, Description, Categorie, Type, Etat, Periodicite, SLA, KPI, Penalite, Seuil, Ciblage, Conformite
 - Colonnes ciblage/conformite avec tooltip pour le texte integral
 - Lien "Voir roue" par ligne : bascule vers l'onglet Roue CSI avec navigation directe vers l'indicateur
 - Clic sur une ligne : navigation vers la vue Indicateur (roue + fiche)
@@ -420,6 +425,7 @@ Trois vues complementaires au Kanban pour le pilotage du projet :
 - [x] Dockerisation (Dockerfile + docker-compose + gunicorn)
 - [x] Migration auto des schemas au demarrage (migrate_all_schemas)
 - [x] CRUD categories dans le referentiel (ajout, renommage, reordonnancement, suppression)
+- [x] Proprietes indicateur (periodicite, SLA, KPI, penalite, seuil) — schema, migration, API, fiche, referentiel
 
 ### A faire — Priorite haute
 

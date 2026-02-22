@@ -34,6 +34,7 @@ Application web Python (Flask + PostgreSQL) pour le suivi de la maturite des ind
 25. **Authentification** : login email+mdp (werkzeug PBKDF2), setup wizard, invitations par lien (token 7j), SSO Microsoft (MSAL conditionnel), suppression detection registre Windows/identity.json
 26. **Dockerisation** : Dockerfile (python:3.11-slim + gunicorn), docker-compose (app + PostgreSQL 16), .dockerignore
 27. **Description projet** : champ texte optionnel sur les projets, editable a la creation/modification, affiche sur les cartes accueil (tronque 80 car.)
+28. **Proprietes indicateur** : 5 champs descriptifs (periodicite, SLA cible, formule KPI, penalite, seuil en secondes), modale edition, affichage fiche + referentiel
 
 **Prochaines etapes** : deploiement VPS, historique/snapshots, generation CR.
 
@@ -49,7 +50,7 @@ Application web Python (Flask + PostgreSQL) pour le suivi de la maturite des ind
   - `etapes`, `statuts_etape`, `etats_indicateur`, `types_indicateur` : tables de reference
 - **`client_<slug>`** : un schema par client, contient les donnees metier
   - `projets` (id, nom, description, date_creation, actif), `projet_membres` : projets du client et membres par projet
-  - `categories`, `indicateurs`, `indicateur_etapes` : donnees de la roue CSI
+  - `categories`, `indicateurs` (+ periodicite, sla_valeur, kpi_formule, penalite, seuil), `indicateur_etapes` : donnees de la roue CSI
   - `actions` : kanban (avec `parent_id` pour hierarchie chapeau)
   - `revues` : historique (futur)
 
@@ -102,12 +103,12 @@ Application web Python (Flask + PostgreSQL) pour le suivi de la maturite des ind
 | `app/services/identity_service.py` | Trigramme, placeholder user, fusion, reconnaissance emails secondaires (PostgreSQL). Detection registre Windows supprimee |
 | `app/services/action_service.py` | CRUD actions Kanban, regroupement par statut, hierarchie parent/enfant (PostgreSQL) |
 | `app/services/member_service.py` | CRUD membres projet via modele deux tables utilisateurs + projet_membres (PostgreSQL) |
-| `app/services/indicateur_service.py` | Donnees roue (3 niveaux), save_step (UPSERT), referentiel (PostgreSQL) |
+| `app/services/indicateur_service.py` | Donnees roue (3 niveaux), save_step (UPSERT), referentiel, proprietes indicateur (PostgreSQL) |
 | `app/templates/` | Templates Jinja2 : base, login, setup, invitation, accueil, global, categorie, indicateur, kanban, referentiel, membres |
 | `app/static/js/wheel.js` | Composant SVG roue (drawSimpleWheel + drawIndicatorWheel avec bulles commentaires, bouton "+"), modale edition statuts/commentaires |
 | `app/static/js/kanban.js` | Kanban drag & drop, autocomplete assignee, taches chapeau (drill-down parent/enfant) |
 | `app/static/js/membres.js` | CRUD membres, copie invitation (URL), auto-trigramme, emails secondaires, date_fin |
-| `app/static/js/referentiel.js` | Interactions page referentiel |
+| `app/static/js/referentiel.js` | Interactions page referentiel, formatage seuil |
 | `app/static/js/sortable.min.js` | Bibliotheque SortableJS (drag & drop) |
 | `app/static/css/style.css` | Theme sombre complet |
 | **`data/`** | **Donnees locales (hors git)** |
@@ -175,6 +176,7 @@ Application web Python (Flask + PostgreSQL) pour le suivi de la maturite des ind
 - [x] Authentification (login email+mdp, invitations par lien, setup wizard, SSO Microsoft prepare)
 - [x] Dockerisation (Dockerfile + docker-compose + gunicorn)
 - [x] Description projet (champ optionnel, creation/edition, affichage accueil, migration idempotente)
+- [x] Proprietes indicateur (periodicite, SLA, KPI, penalite, seuil — schema, migration, API, fiche, referentiel)
 - [ ] Deploiement VPS
 - [ ] Historique et enregistrement global (snapshots)
 - [ ] Generation du CR (compte-rendu diff)
