@@ -10,11 +10,12 @@ _SEVERITE_TO_COLOR = {0: 'grey', 1: 'green', 2: 'yellow', 3: 'orange', 4: 'red'}
 _COLOR_TO_SEVERITE = {v: k for k, v in _SEVERITE_TO_COLOR.items()}
 
 
-_CC_FIELDS = ('ciblage_fonctionnel', 'ciblage_technique', 'conformite_fonctionnel', 'conformite_technique')
+_CC_FIELDS = ('ciblage_fonctionnel', 'ciblage_technique', 'conformite_fonctionnel', 'conformite_technique',
+              'cc_commentaire', 'cc_couleur')
 
 
 def _resolve_ciblage_conformite(ind_row, cat_row, projet_row):
-    """Resout les 4 champs ciblage/conformite avec heritage Indicateur > Categorie > Projet.
+    """Resout les 6 champs ciblage/conformite avec heritage Indicateur > Categorie > Projet.
     Retourne un dict {field: {value, origine, propre}} pour chaque champ."""
     result = {}
     for field in _CC_FIELDS:
@@ -36,11 +37,12 @@ def _resolve_ciblage_conformite(ind_row, cat_row, projet_row):
 # CRUD ciblage/conformite (projet, categorie, indicateur)
 # -------------------------------------------------------------------
 def get_project_ciblage_conformite():
-    """Retourne les 4 champs ciblage/conformite du projet actif."""
+    """Retourne les 6 champs ciblage/conformite du projet actif."""
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT ciblage_fonctionnel, ciblage_technique, conformite_fonctionnel, conformite_technique FROM projets WHERE id = %s",
+            """SELECT ciblage_fonctionnel, ciblage_technique, conformite_fonctionnel, conformite_technique,
+                      cc_commentaire, cc_couleur FROM projets WHERE id = %s""",
             (get_active_project_id(),)
         ).fetchone()
         return dict(row) if row else {f: None for f in _CC_FIELDS}
@@ -49,14 +51,16 @@ def get_project_ciblage_conformite():
 
 
 def save_project_ciblage_conformite(data):
-    """Met a jour les 4 champs ciblage/conformite du projet actif."""
+    """Met a jour les 6 champs ciblage/conformite du projet actif."""
     conn = get_connection()
     try:
         conn.execute(
             """UPDATE projets SET ciblage_fonctionnel = %s, ciblage_technique = %s,
-               conformite_fonctionnel = %s, conformite_technique = %s WHERE id = %s""",
+               conformite_fonctionnel = %s, conformite_technique = %s,
+               cc_commentaire = %s, cc_couleur = %s WHERE id = %s""",
             (data.get('ciblage_fonctionnel'), data.get('ciblage_technique'),
              data.get('conformite_fonctionnel'), data.get('conformite_technique'),
+             data.get('cc_commentaire'), data.get('cc_couleur'),
              get_active_project_id())
         )
         conn.commit()
@@ -65,11 +69,12 @@ def save_project_ciblage_conformite(data):
 
 
 def get_categorie_ciblage_conformite(cat_id):
-    """Retourne les 4 champs ciblage/conformite propres d'une categorie."""
+    """Retourne les 6 champs ciblage/conformite propres d'une categorie."""
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT ciblage_fonctionnel, ciblage_technique, conformite_fonctionnel, conformite_technique FROM categories WHERE id = %s",
+            """SELECT ciblage_fonctionnel, ciblage_technique, conformite_fonctionnel, conformite_technique,
+                      cc_commentaire, cc_couleur FROM categories WHERE id = %s""",
             (cat_id,)
         ).fetchone()
         return dict(row) if row else {f: None for f in _CC_FIELDS}
@@ -78,14 +83,16 @@ def get_categorie_ciblage_conformite(cat_id):
 
 
 def save_categorie_ciblage_conformite(cat_id, data):
-    """Met a jour les 4 champs ciblage/conformite d'une categorie."""
+    """Met a jour les 6 champs ciblage/conformite d'une categorie."""
     conn = get_connection()
     try:
         conn.execute(
             """UPDATE categories SET ciblage_fonctionnel = %s, ciblage_technique = %s,
-               conformite_fonctionnel = %s, conformite_technique = %s WHERE id = %s""",
+               conformite_fonctionnel = %s, conformite_technique = %s,
+               cc_commentaire = %s, cc_couleur = %s WHERE id = %s""",
             (data.get('ciblage_fonctionnel'), data.get('ciblage_technique'),
              data.get('conformite_fonctionnel'), data.get('conformite_technique'),
+             data.get('cc_commentaire'), data.get('cc_couleur'),
              cat_id)
         )
         conn.commit()
@@ -94,11 +101,12 @@ def save_categorie_ciblage_conformite(cat_id, data):
 
 
 def get_indicateur_ciblage_conformite(ind_id):
-    """Retourne les 4 champs ciblage/conformite propres d'un indicateur."""
+    """Retourne les 6 champs ciblage/conformite propres d'un indicateur."""
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT ciblage_fonctionnel, ciblage_technique, conformite_fonctionnel, conformite_technique FROM indicateurs WHERE id = %s",
+            """SELECT ciblage_fonctionnel, ciblage_technique, conformite_fonctionnel, conformite_technique,
+                      cc_commentaire, cc_couleur FROM indicateurs WHERE id = %s""",
             (ind_id,)
         ).fetchone()
         return dict(row) if row else {f: None for f in _CC_FIELDS}
@@ -107,14 +115,16 @@ def get_indicateur_ciblage_conformite(ind_id):
 
 
 def save_indicateur_ciblage_conformite(ind_id, data):
-    """Met a jour les 4 champs ciblage/conformite d'un indicateur."""
+    """Met a jour les 6 champs ciblage/conformite d'un indicateur."""
     conn = get_connection()
     try:
         conn.execute(
             """UPDATE indicateurs SET ciblage_fonctionnel = %s, ciblage_technique = %s,
-               conformite_fonctionnel = %s, conformite_technique = %s WHERE id = %s""",
+               conformite_fonctionnel = %s, conformite_technique = %s,
+               cc_commentaire = %s, cc_couleur = %s WHERE id = %s""",
             (data.get('ciblage_fonctionnel'), data.get('ciblage_technique'),
              data.get('conformite_fonctionnel'), data.get('conformite_technique'),
+             data.get('cc_commentaire'), data.get('cc_couleur'),
              ind_id)
         )
         conn.commit()
@@ -409,13 +419,15 @@ def get_indicateur_data(indicateur_id):
 
         cat = conn.execute(
             """SELECT id, nom, ciblage_fonctionnel, ciblage_technique,
-                      conformite_fonctionnel, conformite_technique
+                      conformite_fonctionnel, conformite_technique,
+                      cc_commentaire, cc_couleur
                FROM categories WHERE id = %s""", (ind['categorie_id'],)
         ).fetchone()
 
         projet_row = conn.execute(
             """SELECT ciblage_fonctionnel, ciblage_technique,
-                      conformite_fonctionnel, conformite_technique
+                      conformite_fonctionnel, conformite_technique,
+                      cc_commentaire, cc_couleur
                FROM projets WHERE id = %s""", (get_active_project_id(),)
         ).fetchone()
 
@@ -562,10 +574,17 @@ def get_indicateur_data(indicateur_id):
             'type_couleur': ind['type_couleur'],
             'etat': ind['etat'],
             'etat_couleur': ind['etat_couleur'],
+            'periodicite': ind.get('periodicite', 'Mensuel'),
+            'sla_valeur': ind.get('sla_valeur'),
+            'kpi_formule': ind.get('kpi_formule'),
+            'penalite': ind.get('penalite', False),
+            'seuil': ind.get('seuil'),
             'ciblage_fonctionnel': ind['ciblage_fonctionnel'],
             'ciblage_technique': ind['ciblage_technique'],
             'conformite_fonctionnel': ind['conformite_fonctionnel'],
             'conformite_technique': ind['conformite_technique'],
+            'cc_commentaire': ind['cc_commentaire'],
+            'cc_couleur': ind['cc_couleur'],
             'resolved': resolved_cc,
             'worst': _SEVERITE_TO_COLOR.get(ind_worst_sev, 'grey')
         }
@@ -800,6 +819,40 @@ def save_step(context, etape, layer, color_name, commentaire,
 # -------------------------------------------------------------------
 # Vue Referentiel
 # -------------------------------------------------------------------
+def get_indicateur_properties(ind_id):
+    """Retourne les 5 proprietes d'un indicateur."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT periodicite, sla_valeur, kpi_formule, penalite, seuil FROM indicateurs WHERE id = %s",
+            (ind_id,)
+        ).fetchone()
+        if row:
+            return dict(row)
+        return {'periodicite': 'Mensuel', 'sla_valeur': None, 'kpi_formule': None, 'penalite': False, 'seuil': None}
+    finally:
+        conn.close()
+
+
+def save_indicateur_properties(ind_id, data):
+    """Met a jour les 5 proprietes d'un indicateur."""
+    conn = get_connection()
+    try:
+        conn.execute(
+            """UPDATE indicateurs SET periodicite = %s, sla_valeur = %s, kpi_formule = %s,
+               penalite = %s, seuil = %s WHERE id = %s""",
+            (data.get('periodicite', 'Mensuel'),
+             data.get('sla_valeur'),
+             data.get('kpi_formule'),
+             bool(data.get('penalite', False)),
+             data.get('seuil'),
+             ind_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 _TYPE_CLASS = {'SLA': 'type-sla', 'KPI': 'type-kpi', 'XLA': 'type-xla'}
 _ETAT_CLASS = {
     'Realise': 'etat-realise', 'En cours': 'etat-encours',
@@ -814,7 +867,8 @@ def get_referentiel_data():
         # Charger projet pour heritage ciblage/conformite
         projet_row = conn.execute(
             """SELECT ciblage_fonctionnel, ciblage_technique,
-                      conformite_fonctionnel, conformite_technique
+                      conformite_fonctionnel, conformite_technique,
+                      cc_commentaire, cc_couleur
                FROM projets WHERE id = %s""", (get_active_project_id(),)
         ).fetchone()
 
@@ -822,15 +876,18 @@ def get_referentiel_data():
         all_cats_cc = {}
         for r in conn.execute(
             """SELECT id, ciblage_fonctionnel, ciblage_technique,
-                      conformite_fonctionnel, conformite_technique
+                      conformite_fonctionnel, conformite_technique,
+                      cc_commentaire, cc_couleur
                FROM categories"""
         ).fetchall():
             all_cats_cc[r['id']] = dict(r)
 
         inds = conn.execute("""
             SELECT i.id, i.code, i.description, i.chapitre,
+                   i.periodicite, i.sla_valeur, i.kpi_formule, i.penalite, i.seuil,
                    i.ciblage_fonctionnel, i.ciblage_technique,
                    i.conformite_fonctionnel, i.conformite_technique,
+                   i.cc_commentaire, i.cc_couleur,
                    i.categorie_id, c.nom as categorie_nom,
                    t.intitule as type, e.intitule as etat
             FROM indicateurs i
@@ -873,6 +930,11 @@ def get_referentiel_data():
                 'etat': ind['etat'],
                 'type_class': _TYPE_CLASS.get(ind['type'], ''),
                 'etat_class': _ETAT_CLASS.get(ind['etat'], ''),
+                'periodicite': ind.get('periodicite', 'Mensuel'),
+                'sla_valeur': ind.get('sla_valeur'),
+                'kpi_formule': ind.get('kpi_formule'),
+                'penalite': ind.get('penalite', False),
+                'seuil': ind.get('seuil'),
                 'resolved': resolved,
                 'worst': _SEVERITE_TO_COLOR.get(worst_sev, 'grey'),
             })

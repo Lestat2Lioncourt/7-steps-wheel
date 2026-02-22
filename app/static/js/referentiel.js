@@ -3,6 +3,20 @@
 // Depends on COL global from wheel.js
 // ===================================================================
 
+function _formatSeuil(s) {
+    if (s === null || s === undefined || s === '') return '-';
+    s = parseInt(s);
+    if (isNaN(s) || s <= 0) return '-';
+    var h = Math.floor(s / 3600);
+    var m = Math.floor((s % 3600) / 60);
+    var sec = s % 60;
+    var parts = [];
+    if (h > 0) parts.push(h + 'h');
+    if (m > 0) parts.push(m + 'min');
+    if (sec > 0 && h === 0) parts.push(sec + 's');
+    return parts.join(' ') || '0s';
+}
+
 function initReferentiel() {
     // Attach events
     var search = document.getElementById('ref-search');
@@ -14,6 +28,12 @@ function initReferentiel() {
     if (catFilter) catFilter.addEventListener('change', filterRef);
     if (typeFilter) typeFilter.addEventListener('change', filterRef);
     if (etatFilter) etatFilter.addEventListener('change', filterRef);
+
+    // Format seuil values
+    document.querySelectorAll('.ref-seuil').forEach(function(el) {
+        var raw = el.getAttribute('data-seuil');
+        el.textContent = _formatSeuil(raw);
+    });
 
     updateRefStats();
 }

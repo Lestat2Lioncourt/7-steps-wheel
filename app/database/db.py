@@ -483,6 +483,21 @@ def migrate_client_schema(schema_name):
             conn.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS conformite_fonctionnel TEXT")
             conn.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS conformite_technique TEXT")
 
+        # --- Migration commentaire general + couleur (projets, categories, indicateurs) ---
+        for tbl in ('projets', 'categories', 'indicateurs'):
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS cc_commentaire TEXT")
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS cc_couleur TEXT")
+
+        # --- Migration proprietes indicateur (periodicite, SLA, KPI, penalite, seuil) ---
+        for tbl in ('indicateurs', 'revue_indicateurs'):
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS periodicite TEXT"
+                         + (" DEFAULT 'Mensuel'" if tbl == 'indicateurs' else ""))
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS sla_valeur REAL")
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS kpi_formule TEXT")
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS penalite BOOLEAN"
+                         + (" DEFAULT FALSE" if tbl == 'indicateurs' else ""))
+            conn.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS seuil INTEGER")
+
         print(f"Migration schema {schema_name} OK")
     finally:
         conn.close()

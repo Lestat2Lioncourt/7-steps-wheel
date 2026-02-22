@@ -55,6 +55,20 @@
             <label>Categorie</label>
             <div class="val">{{ data.categorie.nom }}</div>
         </div>
+        <div class="fiche-field">
+            <label>Proprietes
+                {% if session.get('user_role') != 'lecteur' %}
+                <span class="fiche-edit-icon" onclick="openPropertiesModal({{ ind.id }})" title="Editer">&#9998;</span>
+                {% endif %}
+            </label>
+            <div class="val-box" style="display:flex;flex-direction:column;gap:3px;font-size:12px">
+                <div><span style="color:#888">Periodicite :</span> {{ ind.periodicite or 'Mensuel' }}</div>
+                <div><span style="color:#888">SLA :</span> {% if ind.sla_valeur is not none %}{{ (ind.sla_valeur * 100)|round(1) }}%{% else %}<span style="color:#555;font-style:italic">-</span>{% endif %}</div>
+                <div><span style="color:#888">KPI :</span> {% if ind.kpi_formule %}{{ ind.kpi_formule }}{% else %}<span style="color:#555;font-style:italic">-</span>{% endif %}</div>
+                <div><span style="color:#888">Penalite :</span> {% if ind.penalite %}Oui{% else %}Non{% endif %}</div>
+                <div><span style="color:#888">Seuil :</span> {% if ind.seuil is not none %}<span id="fiche-seuil-display">{{ ind.seuil }}s</span>{% else %}<span style="color:#555;font-style:italic">-</span>{% endif %}</div>
+            </div>
+        </div>
         {% set rc = ind.resolved.ciblage_fonctionnel %}
         {% set rct = ind.resolved.ciblage_technique %}
         <div class="fiche-field">
@@ -97,6 +111,20 @@
             <div class="val-box" style="color:#555;font-style:italic">Non defini</div>
             {% endif %}
         </div>
+        {% set rcc = ind.resolved.cc_commentaire %}
+        {% set rcco = ind.resolved.cc_couleur %}
+        {% if rcc.value or rcco.value %}
+        <div class="fiche-field">
+            <label>Commentaire general
+                {% if session.get('user_role') != 'lecteur' %}
+                <span class="fiche-edit-icon" onclick="openCiblageModal('indicateur', {{ ind.id }})" title="Editer">&#9998;</span>
+                {% endif %}
+            </label>
+            <div class="val-box">
+                {% if rcco.value %}<span class="status-dot c-{{ rcco.value }}" style="margin-right:6px"></span>{% endif %}{{ rcc.value or '' }}{% if rcc.value and not rcc.propre %} <span class="cc-origin">&larr; {{ rcc.origine }}</span>{% endif %}
+            </div>
+        </div>
+        {% endif %}
         <a class="fiche-actions-link" href="{{ url_for('main.vue_kanban', id=ind.id) }}">
             Actions (Kanban) &rsaquo;
         </a>
@@ -119,8 +147,122 @@
 </div>
 {% endblock %}
 
+{% if session.get('user_role') != 'lecteur' %}
+<div class="kanban-modal-overlay" id="properties-modal-overlay" onclick="if(event.target===this)closePropertiesModal()">
+    <div class="kanban-modal" style="max-width:440px">
+        <h3>Proprietes de l'indicateur</h3>
+        <div class="form-group">
+            <label>Periodicite</label>
+            <select class="form-input" id="prop-periodicite">
+                <option value="Quotidien">Quotidien</option>
+                <option value="Hebdomadaire">Hebdomadaire</option>
+                <option value="Mensuel">Mensuel</option>
+                <option value="Trimestriel">Trimestriel</option>
+                <option value="Semestriel">Semestriel</option>
+                <option value="Annuel">Annuel</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Valeur SLA (0 a 1)</label>
+            <input type="number" class="form-input" id="prop-sla" step="0.01" min="0" max="1" placeholder="ex: 0.95">
+        </div>
+        <div class="form-group">
+            <label>Formule KPI</label>
+            <textarea class="form-input" id="prop-kpi" rows="2" placeholder="Formule de calcul..."></textarea>
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="prop-penalite" style="width:auto">
+            <label for="prop-penalite" style="margin:0;cursor:pointer">Penalite applicable</label>
+        </div>
+        <div class="form-group">
+            <label>Seuil (en secondes)</label>
+            <input type="number" class="form-input" id="prop-seuil" min="0" placeholder="ex: 3600">
+            <div style="font-size:11px;color:#666;margin-top:2px" id="prop-seuil-preview"></div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-secondary" onclick="closePropertiesModal()">Annuler</button>
+            <button class="btn btn-primary" onclick="saveProperties()">Enregistrer</button>
+        </div>
+        <input type="hidden" id="prop-ind-id">
+    </div>
+</div>
+{% endif %}
+
 {% block scripts %}
 <script>
+function formatSeuil(s) {
+    if (s === null || s === undefined || s === '') return '-';
+    s = parseInt(s);
+    if (isNaN(s) || s <= 0) return '-';
+    var h = Math.floor(s / 3600);
+    var m = Math.floor((s % 3600) / 60);
+    var sec = s % 60;
+    var parts = [];
+    if (h > 0) parts.push(h + 'h');
+    if (m > 0) parts.push(m + 'min');
+    if (sec > 0 && h === 0) parts.push(sec + 's');
+    return parts.join(' ') || '0s';
+}
+
+var _propIndId = null;
+
+function openPropertiesModal(indId) {
+    _propIndId = indId;
+    document.getElementById('prop-ind-id').value = indId;
+    fetch('/api/indicateur/' + indId + '/properties')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            document.getElementById('prop-periodicite').value = d.periodicite || 'Mensuel';
+            document.getElementById('prop-sla').value = d.sla_valeur !== null && d.sla_valeur !== undefined ? d.sla_valeur : '';
+            document.getElementById('prop-kpi').value = d.kpi_formule || '';
+            document.getElementById('prop-penalite').checked = !!d.penalite;
+            document.getElementById('prop-seuil').value = d.seuil !== null && d.seuil !== undefined ? d.seuil : '';
+            updateSeuilPreview();
+            document.getElementById('properties-modal-overlay').classList.add('active');
+        });
+}
+
+function closePropertiesModal() {
+    document.getElementById('properties-modal-overlay').classList.remove('active');
+}
+
+function saveProperties() {
+    var indId = document.getElementById('prop-ind-id').value;
+    var slaVal = document.getElementById('prop-sla').value;
+    var seuilVal = document.getElementById('prop-seuil').value;
+    var body = {
+        periodicite: document.getElementById('prop-periodicite').value,
+        sla_valeur: slaVal !== '' ? parseFloat(slaVal) : null,
+        kpi_formule: document.getElementById('prop-kpi').value || null,
+        penalite: document.getElementById('prop-penalite').checked,
+        seuil: seuilVal !== '' ? parseInt(seuilVal) : null
+    };
+    fetch('/api/indicateur/' + indId + '/properties', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    }).then(function(r) { return r.json(); })
+      .then(function(d) {
+          if (d.ok) location.reload();
+      });
+}
+
+function updateSeuilPreview() {
+    var v = document.getElementById('prop-seuil').value;
+    document.getElementById('prop-seuil-preview').textContent = v ? formatSeuil(v) : '';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var seuilInput = document.getElementById('prop-seuil');
+    if (seuilInput) seuilInput.addEventListener('input', updateSeuilPreview);
+    // Format seuil in fiche panel
+    var ficheSeuilEl = document.getElementById('fiche-seuil-display');
+    if (ficheSeuilEl) {
+        var raw = ficheSeuilEl.textContent.replace('s', '');
+        ficheSeuilEl.textContent = formatSeuil(raw);
+    }
+});
+
 (function() {
     var stepData = {{ data.step_data|tojson }};
     var statusCounts = {{ data.status_counts|tojson }};

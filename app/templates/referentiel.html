@@ -77,6 +77,11 @@
                 <th>Categorie</th>
                 <th>Type</th>
                 <th>Etat</th>
+                <th>Period.</th>
+                <th>SLA</th>
+                <th>KPI</th>
+                <th>Pen.</th>
+                <th>Seuil</th>
                 <th>Ciblage</th>
                 <th>Conformite</th>
                 <th></th>
@@ -99,6 +104,11 @@
                 <td style="color:#777;font-size:11px">{{ ind.categorie_nom }}</td>
                 <td><span class="type-badge {{ ind.type_class }}">{{ ind.type }}</span></td>
                 <td><span class="etat-badge {{ ind.etat_class }}">{{ ind.etat }}</span></td>
+                <td style="font-size:11px;color:#999">{{ ind.periodicite or '' }}</td>
+                <td style="font-size:11px;color:#999">{% if ind.sla_valeur is not none %}{{ (ind.sla_valeur * 100)|round(1)|int }}%{% endif %}</td>
+                <td style="font-size:11px;color:#999;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ ind.kpi_formule or '' }}">{{ ind.kpi_formule or '' }}</td>
+                <td style="font-size:11px;color:#999">{% if ind.penalite %}Oui{% elif ind.penalite is not none %}Non{% endif %}</td>
+                <td style="font-size:11px;color:#999">{% if ind.seuil is not none %}<span class="ref-seuil" data-seuil="{{ ind.seuil }}">{{ ind.seuil }}s</span>{% endif %}</td>
                 {% set rcib = ind.resolved.ciblage_fonctionnel %}
                 {% set rcibt = ind.resolved.ciblage_technique %}
                 <td style="font-size:11px;color:#999;max-width:160px" title="{% if rcib.value %}[F] {{ rcib.value }}{% endif %}{% if rcibt.value %}&#10;[T] {{ rcibt.value }}{% endif %}">{% if rcib.value %}{{ rcib.value[:23] ~ '...' if rcib.value|length > 25 else rcib.value }}{% endif %}{% if rcibt.value %} <span class="cc-tag-mini cc-tech">T</span>{% endif %}</td>

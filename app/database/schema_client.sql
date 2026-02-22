@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS projets (
     ciblage_technique       TEXT,
     conformite_fonctionnel  TEXT,
     conformite_technique    TEXT,
+    cc_commentaire          TEXT,
+    cc_couleur              TEXT,
     date_creation           TEXT NOT NULL,
     actif                   BOOLEAN DEFAULT TRUE
 );
@@ -40,6 +42,8 @@ CREATE TABLE IF NOT EXISTS categories (
     ciblage_technique       TEXT,
     conformite_fonctionnel  TEXT,
     conformite_technique    TEXT,
+    cc_commentaire          TEXT,
+    cc_couleur              TEXT,
     UNIQUE(projet_id, nom)
 );
 
@@ -53,10 +57,17 @@ CREATE TABLE IF NOT EXISTS indicateurs (
     categorie_id            INTEGER NOT NULL REFERENCES categories(id),
     etat_id                 INTEGER NOT NULL REFERENCES common.etats_indicateur(id),
     type_id                 INTEGER NOT NULL REFERENCES common.types_indicateur(id),
+    periodicite             TEXT DEFAULT 'Mensuel',
+    sla_valeur              REAL,
+    kpi_formule             TEXT,
+    penalite                BOOLEAN DEFAULT FALSE,
+    seuil                   INTEGER,
     ciblage_fonctionnel     TEXT,
     ciblage_technique       TEXT,
     conformite_fonctionnel  TEXT,
     conformite_technique    TEXT,
+    cc_commentaire          TEXT,
+    cc_couleur              TEXT,
     UNIQUE(projet_id, code)
 );
 
@@ -120,6 +131,11 @@ CREATE TABLE IF NOT EXISTS revue_indicateurs (
     categorie_id            INTEGER REFERENCES categories(id),
     etat_id                 INTEGER REFERENCES common.etats_indicateur(id),
     type_id                 INTEGER REFERENCES common.types_indicateur(id),
+    periodicite             TEXT,
+    sla_valeur              REAL,
+    kpi_formule             TEXT,
+    penalite                BOOLEAN,
+    seuil                   INTEGER,
     ciblage_fonctionnel     TEXT,
     ciblage_technique       TEXT,
     conformite_fonctionnel  TEXT,

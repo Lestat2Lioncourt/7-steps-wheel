@@ -34,6 +34,8 @@ from app.services.indicateur_service import (
     save_categorie_ciblage_conformite,
     get_indicateur_ciblage_conformite,
     save_indicateur_ciblage_conformite,
+    get_indicateur_properties,
+    save_indicateur_properties,
 )
 from app.services.action_service import (
     get_actions_for_indicator,
@@ -679,6 +681,22 @@ def api_get_indicateur_ciblage(ind_id):
 def api_save_indicateur_ciblage(ind_id):
     d = request.get_json()
     save_indicateur_ciblage_conformite(ind_id, d)
+    return jsonify({'ok': True})
+
+
+# -------------------------------------------------------------------
+# Proprietes indicateur (periodicite, SLA, KPI, penalite, seuil)
+# -------------------------------------------------------------------
+@main_bp.route('/api/indicateur/<int:ind_id>/properties', methods=['GET'])
+def api_get_indicateur_properties(ind_id):
+    return jsonify(get_indicateur_properties(ind_id))
+
+
+@main_bp.route('/api/indicateur/<int:ind_id>/properties', methods=['POST'])
+@require_write
+def api_save_indicateur_properties(ind_id):
+    d = request.get_json()
+    save_indicateur_properties(ind_id, d)
     return jsonify({'ok': True})
 
 
