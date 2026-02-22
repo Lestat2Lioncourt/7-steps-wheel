@@ -973,6 +973,127 @@ def api_generate_invitation(id):
     return jsonify({'ok': True, 'url': inv_url})
 
 
+# -------------------------------------------------------------------
+# CRUD Categories (referentiel)
+# -------------------------------------------------------------------
+@main_bp.route('/api/categories', methods=['POST'])
+@require_admin
+def api_create_category():
+    d = request.get_json()
+    nom = (d.get('nom') or '').strip() if d else ''
+    if not nom:
+        return jsonify({'ok': False, 'error': 'Nom requis'}), 400
+    projet_id = get_active_project_id()
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT COALESCE(MAX(ordre), 0) + 1 AS next_ordre FROM categories WHERE projet_id = %s",
+            (projet_id,)
+        ).fetchone()
+        next_ordre = row['next_ordre']
+        new = conn.execute(
+            "INSERT INTO categories (projet_id, nom, ordre) VALUES (%s, %s, %s) RETURNING id",
+            (projet_id, nom, next_ordre)
+        ).fetchone()
+        conn.commit()
+        return jsonify({'ok': True, 'id': new['id']})
+    except Exception as e:
+        conn.rollback()
+        if 'unique' in str(e).lower() or 'UniqueViolation' in type(e).__name__:
+            return jsonify({'ok': False, 'error': 'Une categorie avec ce nom existe deja'}), 400
+        raise
+    finally:
+        conn.close()
+
+
+@main_bp.route('/api/categories/<int:cat_id>', methods=['PUT'])
+@require_admin
+def api_update_category(cat_id):
+    d = request.get_json()
+    nom = (d.get('nom') or '').strip() if d else ''
+    if not nom:
+        return jsonify({'ok': False, 'error': 'Nom requis'}), 400
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE categories SET nom = %s WHERE id = %s AND projet_id = %s",
+            (nom, cat_id, get_active_project_id())
+        )
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        conn.rollback()
+        if 'unique' in str(e).lower() or 'UniqueViolation' in type(e).__name__:
+            return jsonify({'ok': False, 'error': 'Une categorie avec ce nom existe deja'}), 400
+        raise
+    finally:
+        conn.close()
+
+
+@main_bp.route('/api/categories/<int:cat_id>/reorder', methods=['POST'])
+@require_admin
+def api_reorder_category(cat_id):
+    d = request.get_json()
+    direction = d.get('direction') if d else None
+    if direction not in ('up', 'down'):
+        return jsonify({'ok': False, 'error': 'Direction invalide'}), 400
+    projet_id = get_active_project_id()
+    conn = get_connection()
+    try:
+        current = conn.execute(
+            "SELECT id, ordre FROM categories WHERE id = %s AND projet_id = %s",
+            (cat_id, projet_id)
+        ).fetchone()
+        if not current:
+            return jsonify({'ok': False, 'error': 'Categorie introuvable'}), 404
+        if direction == 'up':
+            neighbor = conn.execute(
+                "SELECT id, ordre FROM categories WHERE projet_id = %s AND ordre < %s ORDER BY ordre DESC LIMIT 1",
+                (projet_id, current['ordre'])
+            ).fetchone()
+        else:
+            neighbor = conn.execute(
+                "SELECT id, ordre FROM categories WHERE projet_id = %s AND ordre > %s ORDER BY ordre ASC LIMIT 1",
+                (projet_id, current['ordre'])
+            ).fetchone()
+        if not neighbor:
+            return jsonify({'ok': True})  # already at boundary
+        conn.execute("UPDATE categories SET ordre = %s WHERE id = %s", (neighbor['ordre'], current['id']))
+        conn.execute("UPDATE categories SET ordre = %s WHERE id = %s", (current['ordre'], neighbor['id']))
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@main_bp.route('/api/categories/<int:cat_id>', methods=['DELETE'])
+@require_admin
+def api_delete_category(cat_id):
+    projet_id = get_active_project_id()
+    conn = get_connection()
+    try:
+        count = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM indicateurs WHERE categorie_id = %s",
+            (cat_id,)
+        ).fetchone()['cnt']
+        if count > 0:
+            return jsonify({'ok': False, 'error': 'Categorie non vide (' + str(count) + ' indicateur(s))'}), 400
+        conn.execute(
+            "DELETE FROM categories WHERE id = %s AND projet_id = %s",
+            (cat_id, projet_id)
+        )
+        conn.commit()
+        return jsonify({'ok': True})
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 @main_bp.route('/api/switch-role', methods=['POST'])
 def api_switch_role():
     real_role = session.get('user_real_role') or session.get('user_role')

@@ -1,5 +1,5 @@
 // ===================================================================
-// Roue CSI - Referentiel : filtrage client-side
+// Roue CSI - Referentiel : filtrage client-side + CRUD categories
 // Depends on COL global from wheel.js
 // ===================================================================
 
@@ -80,4 +80,85 @@ function qfCat(el, cat) {
     var items = document.querySelectorAll('.sidebar-item');
     items.forEach(function(i) { i.classList.remove('active'); });
     el.classList.add('active');
+}
+
+// -------------------------------------------------------------------
+// CRUD Categories
+// -------------------------------------------------------------------
+function openCategoryModal(catId, catNom) {
+    var overlay = document.getElementById('category-modal-overlay');
+    if (!overlay) return;
+    document.getElementById('category-modal-id').value = catId || '';
+    document.getElementById('category-modal-nom').value = catNom || '';
+    document.getElementById('category-modal-title').textContent =
+        catId ? 'Renommer la categorie' : 'Ajouter une categorie';
+    overlay.classList.add('open');
+    document.getElementById('category-modal-nom').focus();
+}
+
+function closeCategoryModal() {
+    var overlay = document.getElementById('category-modal-overlay');
+    if (overlay) overlay.classList.remove('open');
+}
+
+function submitCategory() {
+    var catId = document.getElementById('category-modal-id').value;
+    var nom = document.getElementById('category-modal-nom').value.trim();
+    if (!nom) return;
+
+    var url, method;
+    if (catId) {
+        url = '/api/categories/' + catId;
+        method = 'PUT';
+    } else {
+        url = '/api/categories';
+        method = 'POST';
+    }
+
+    fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nom: nom })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            location.reload();
+        } else {
+            alert(data.error || 'Erreur');
+        }
+    })
+    .catch(function() { alert('Erreur reseau'); });
+}
+
+function deleteCategory(catId, catNom) {
+    if (!confirm('Supprimer la categorie "' + catNom + '" ?')) return;
+
+    fetch('/api/categories/' + catId, { method: 'DELETE' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            location.reload();
+        } else {
+            alert(data.error || 'Erreur');
+        }
+    })
+    .catch(function() { alert('Erreur reseau'); });
+}
+
+function reorderCategory(catId, direction) {
+    fetch('/api/categories/' + catId + '/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: direction })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            location.reload();
+        } else {
+            alert(data.error || 'Erreur');
+        }
+    })
+    .catch(function() { alert('Erreur reseau'); });
 }

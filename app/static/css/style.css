@@ -661,6 +661,43 @@ body {
 .roue-link:hover { text-decoration: underline; }
 .ref-row.hidden { display: none; }
 
+/* Referentiel: add category button */
+.ref-add-btn {
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    background: #0f3460;
+    color: #a0c4ff;
+    transition: all .15s;
+}
+.ref-add-btn:hover { background: #1a4580; color: #fff; }
+
+/* Sidebar category action buttons */
+.sidebar-actions {
+    display: none;
+    align-items: center;
+    gap: 1px;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+.sidebar-item:hover .sidebar-actions { display: flex; }
+.sidebar-action-btn {
+    background: none;
+    border: none;
+    color: #555;
+    cursor: pointer;
+    font-size: 10px;
+    padding: 1px 3px;
+    border-radius: 3px;
+    line-height: 1;
+    transition: color .15s;
+}
+.sidebar-action-btn:hover { color: #a0c4ff; }
+.sidebar-action-delete:hover { color: #dc2626; }
+
 /* ---- FICHE ACTIONS LINK ---- */
 .fiche-actions-link {
     display: flex;

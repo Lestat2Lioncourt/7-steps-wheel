@@ -16,8 +16,16 @@
     {% for cat in data.categories %}
     <div class="sidebar-item" onclick="qfCat(this, '{{ cat.nom }}')">
         <span class="sidebar-dot" style="background:{{ COL[cat.worst] }}"></span>
-        <span>{{ cat.nom }}</span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ cat.nom }}</span>
         <span class="sidebar-count">{{ cat.count }}</span>
+        {% if session.get('user_role') == 'admin' %}
+        <span class="sidebar-actions" onclick="event.stopPropagation()">
+            <button class="sidebar-action-btn" onclick="reorderCategory({{ cat.id }}, 'up')" title="Monter">&#9650;</button>
+            <button class="sidebar-action-btn" onclick="reorderCategory({{ cat.id }}, 'down')" title="Descendre">&#9660;</button>
+            <button class="sidebar-action-btn" onclick="openCategoryModal({{ cat.id }}, '{{ cat.nom|e }}')" title="Renommer">&#9998;</button>
+            <button class="sidebar-action-btn sidebar-action-delete" onclick="deleteCategory({{ cat.id }}, '{{ cat.nom|e }}')" title="Supprimer">&#10005;</button>
+        </span>
+        {% endif %}
     </div>
     {% endfor %}
 </div>
@@ -25,7 +33,12 @@
 
 {% block content %}
 <div class="ref-header">
-    <h2>Referentiel des indicateurs</h2>
+    <div style="display:flex;align-items:center;gap:12px">
+        <h2>Referentiel des indicateurs</h2>
+        {% if session.get('user_role') == 'admin' %}
+        <button class="ref-add-btn" onclick="openCategoryModal(null, '')">+ Categorie</button>
+        {% endif %}
+    </div>
     <div class="subtitle">Design et parametrage des indicateurs</div>
 </div>
 
@@ -98,6 +111,23 @@
         </tbody>
     </table>
 </div>
+
+{% if session.get('user_role') == 'admin' %}
+<div class="kanban-modal-overlay" id="category-modal-overlay" onclick="if(event.target===this)closeCategoryModal()">
+    <div class="kanban-modal">
+        <h3 id="category-modal-title">Ajouter une categorie</h3>
+        <div class="form-group">
+            <label>Nom</label>
+            <input type="text" class="form-input" id="category-modal-nom" placeholder="Nom de la categorie">
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-secondary" onclick="closeCategoryModal()">Annuler</button>
+            <button class="btn btn-primary" onclick="submitCategory()">Enregistrer</button>
+        </div>
+        <input type="hidden" id="category-modal-id">
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
