@@ -29,9 +29,12 @@
             {% for p in c.projects %}
             <div class="project-card">
                 <a class="project-card-name" href="{{ url_for('main.select_project', client_id=c.id, project_id=p.id) }}">{{ p.nom }}</a>
+                {% if p.description %}
+                <div class="project-card-desc">{{ p.description|truncate(80) }}</div>
+                {% endif %}
                 <div class="project-card-file">{{ p.date_creation }}</div>
                 <button type="button" class="project-card-btn project-card-btn-edit"
-                        onclick="event.stopPropagation(); showEditProjectDialog({{ c.id }}, {{ p.id }}, '{{ p.nom|e }}')">Editer</button>
+                        onclick="event.stopPropagation(); showEditProjectDialog({{ c.id }}, {{ p.id }}, '{{ p.nom|e }}', '{{ p.description|default("", true)|e }}')">Editer</button>
             </div>
             {% endfor %}
 
@@ -77,6 +80,10 @@
             <label for="project-name">Nom du projet</label>
             <input type="text" id="project-name" name="name" placeholder="Ex: Contrat 2026" required>
         </div>
+        <div class="login-field">
+            <label for="project-desc">Description <span style="color:#888;font-weight:normal">(optionnel)</span></label>
+            <textarea id="project-desc" name="description" rows="3" placeholder="Description du projet..." style="width:100%;resize:vertical"></textarea>
+        </div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
             <button type="button" class="btn btn-secondary" onclick="this.closest('.new-project-overlay').style.display='none'">Annuler</button>
             <button type="submit" class="btn btn-primary">Creer</button>
@@ -109,6 +116,10 @@
             <label for="edit-project-name">Nom du projet</label>
             <input type="text" id="edit-project-name" name="name" required>
         </div>
+        <div class="login-field">
+            <label for="edit-project-desc">Description <span style="color:#888;font-weight:normal">(optionnel)</span></label>
+            <textarea id="edit-project-desc" name="description" rows="3" style="width:100%;resize:vertical"></textarea>
+        </div>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
             <button type="button" class="btn-clear" id="edit-project-delete-btn" onclick="confirmDeleteProject()">Supprimer</button>
             <span style="flex:1"></span>
@@ -133,6 +144,7 @@ function showDialog(id) {
 function showNewProjectDialog(clientId) {
     document.getElementById('new-project-form').action = '/client/' + clientId + '/projet/nouveau';
     document.getElementById('project-name').value = '';
+    document.getElementById('project-desc').value = '';
     document.getElementById('new-project-dialog').style.display = 'flex';
     setTimeout(function() { document.getElementById('project-name').focus(); }, 100);
 }
@@ -157,11 +169,12 @@ function confirmDeleteClient() {
 }
 
 /* --- Modification projet --- */
-function showEditProjectDialog(clientId, projectId, name) {
+function showEditProjectDialog(clientId, projectId, name, description) {
     _editProjectClientId = clientId;
     _editProjectId = projectId;
     document.getElementById('edit-project-form').action = '/client/' + clientId + '/projet/' + projectId + '/modifier';
     document.getElementById('edit-project-name').value = name;
+    document.getElementById('edit-project-desc').value = description || '';
     document.getElementById('edit-project-dialog').style.display = 'flex';
     setTimeout(function() { document.getElementById('edit-project-name').focus(); }, 100);
 }

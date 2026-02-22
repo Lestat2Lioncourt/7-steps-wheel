@@ -289,7 +289,7 @@ def load_projects(client_schema=None):
             sql.Identifier(schema)
         ))
         rows = conn.execute(
-            "SELECT id, nom, date_creation, actif FROM projets ORDER BY nom"
+            "SELECT id, nom, description, date_creation, actif FROM projets ORDER BY nom"
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
@@ -307,7 +307,7 @@ def get_project_by_id(project_id, client_schema=None):
             sql.Identifier(schema)
         ))
         row = conn.execute(
-            "SELECT id, nom, date_creation, actif FROM projets WHERE id = %s",
+            "SELECT id, nom, description, date_creation, actif FROM projets WHERE id = %s",
             (project_id,)
         ).fetchone()
         return dict(row) if row else None
@@ -315,9 +315,9 @@ def get_project_by_id(project_id, client_schema=None):
         conn.close()
 
 
-def create_project(nom, client_schema=None):
+def create_project(nom, client_schema=None, description=None):
     """Cree un nouveau projet dans le schema client actif.
-    Retourne le dict {id, nom, date_creation, actif}."""
+    Retourne le dict {id, nom, description, date_creation, actif}."""
     schema = client_schema or _active_client_schema
     if not schema:
         raise ValueError("Aucun client actif")
@@ -327,9 +327,9 @@ def create_project(nom, client_schema=None):
             sql.Identifier(schema)
         ))
         row = conn.execute(
-            """INSERT INTO projets (nom, date_creation)
-               VALUES (%s, %s) RETURNING id, nom, date_creation, actif""",
-            (nom, date.today().isoformat())
+            """INSERT INTO projets (nom, description, date_creation)
+               VALUES (%s, %s, %s) RETURNING id, nom, description, date_creation, actif""",
+            (nom, description, date.today().isoformat())
         ).fetchone()
         print(f"Projet cree : {nom}")
         return dict(row)
@@ -337,8 +337,8 @@ def create_project(nom, client_schema=None):
         conn.close()
 
 
-def update_project(project_id, nom=None, client_schema=None):
-    """Met a jour le nom d'un projet."""
+def update_project(project_id, nom=None, description=None, client_schema=None):
+    """Met a jour le nom et/ou la description d'un projet."""
     schema = client_schema or _active_client_schema
     if not schema:
         return None
@@ -352,8 +352,13 @@ def update_project(project_id, nom=None, client_schema=None):
                 "UPDATE projets SET nom = %s WHERE id = %s",
                 (nom, project_id)
             )
+        if description is not None:
+            conn.execute(
+                "UPDATE projets SET description = %s WHERE id = %s",
+                (description, project_id)
+            )
         row = conn.execute(
-            "SELECT id, nom, date_creation, actif FROM projets WHERE id = %s",
+            "SELECT id, nom, description, date_creation, actif FROM projets WHERE id = %s",
             (project_id,)
         ).fetchone()
         return dict(row) if row else None
@@ -394,7 +399,7 @@ def get_projects_for_user(user_id, client_schema=None):
             sql.Identifier(schema)
         ))
         rows = conn.execute(
-            """SELECT p.id, p.nom, p.date_creation, pm.role
+            """SELECT p.id, p.nom, p.description, p.date_creation, pm.role
                FROM projets p
                JOIN projet_membres pm ON pm.projet_id = p.id
                WHERE pm.user_id = %s AND p.actif = TRUE
@@ -438,8 +443,8 @@ def migrate_client_schema(schema_name):
         with open(SCHEMA_CLIENT_PATH, "r", encoding="utf-8") as f:
             conn.execute(f.read())
 
-        # Migrations futures iront ici :
-        # conn.execute("ALTER TABLE actions ADD COLUMN IF NOT EXISTS new_col TEXT")
+        # Migrations incrementales (idempotentes)
+        conn.execute("ALTER TABLE projets ADD COLUMN IF NOT EXISTS description TEXT")
 
         print(f"Migration schema {schema_name} OK")
     finally:

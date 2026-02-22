@@ -445,6 +445,7 @@ def delete_client_route(client_id):
 @main_bp.route('/client/<int:client_id>/projet/nouveau', methods=['POST'])
 def create_project_route(client_id):
     name = request.form.get('name', '').strip()
+    description = request.form.get('description', '').strip() or None
     if not name:
         return redirect(url_for('main.accueil'))
 
@@ -452,7 +453,7 @@ def create_project_route(client_id):
     if not client:
         return redirect(url_for('main.accueil'))
 
-    project = create_project(name, client['schema_name'])
+    project = create_project(name, client['schema_name'], description=description)
 
     # Activer le contexte pour le nouveau projet
     _activate_project(client['schema_name'], project['id'])
@@ -500,12 +501,13 @@ def select_project(client_id, project_id):
 @main_bp.route('/client/<int:client_id>/projet/<int:project_id>/modifier', methods=['POST'])
 def update_project_route(client_id, project_id):
     name = request.form.get('name', '').strip()
+    description = request.form.get('description', '').strip()
     if not name:
         return redirect(url_for('main.accueil'))
     client = get_client_by_id(client_id)
     if not client:
         return redirect(url_for('main.accueil'))
-    update_project(project_id, nom=name, client_schema=client['schema_name'])
+    update_project(project_id, nom=name, description=description, client_schema=client['schema_name'])
     if session.get('project_id') == project_id:
         session['project_name'] = name
     return redirect(url_for('main.accueil'))

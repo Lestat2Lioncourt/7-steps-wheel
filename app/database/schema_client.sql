@@ -9,6 +9,7 @@
 CREATE TABLE IF NOT EXISTS projets (
     id              SERIAL PRIMARY KEY,
     nom             TEXT NOT NULL,
+    description     TEXT,
     date_creation   TEXT NOT NULL,
     actif           BOOLEAN DEFAULT TRUE
 );
