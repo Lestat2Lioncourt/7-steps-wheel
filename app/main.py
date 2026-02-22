@@ -9,7 +9,7 @@ import webbrowser
 import threading
 from pathlib import Path
 from flask import Flask
-from app.database.db import init_common, DATA_DIR
+from app.database.db import init_common, migrate_all_schemas, DATA_DIR
 
 HOST = "127.0.0.1"
 PORT = 5000
@@ -34,6 +34,9 @@ def create_app() -> Flask:
 
     # Initialisation du schema common (tables de reference, seed)
     init_common()
+
+    # Migration de tous les schemas clients existants (ajout colonnes, etc.)
+    migrate_all_schemas()
 
     # Enregistrement du blueprint principal
     from app.routes.main import main_bp
